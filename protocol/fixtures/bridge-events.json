@@ -1,0 +1,46 @@
+{
+  "protocol": 1,
+  "publicEvents": [
+    { "raw": { "v": 1, "type": "ready", "payload": null }, "event": { "name": "ready" } },
+    { "raw": { "v": 1, "type": "unread_changed", "payload": { "count": 3 } }, "event": { "name": "unreadChanged", "count": 3 } },
+    {
+      "raw": { "v": 1, "type": "message_received", "payload": { "conversationId": 101, "messageId": 9001 } },
+      "event": { "name": "messageReceived", "conversationId": 101, "messageId": 9001 }
+    },
+    {
+      "raw": { "v": 1, "type": "conversation_started", "payload": { "conversationId": 101 } },
+      "event": { "name": "conversationStarted", "conversationId": 101 }
+    },
+    {
+      "raw": { "v": 1, "type": "conversation_closed", "payload": { "conversationId": 101 } },
+      "event": { "name": "conversationClosed", "conversationId": 101 }
+    },
+    {
+      "raw": { "v": 1, "type": "identified", "payload": { "externalId": "user-42", "contactId": 55 } },
+      "event": { "name": "identified", "externalId": "user-42", "contactId": 55 }
+    },
+    { "raw": { "v": 1, "type": "logout", "payload": null }, "event": { "name": "loggedOut" } },
+    { "raw": { "v": 1, "type": "error", "payload": { "code": "INIT_FAILED" } }, "event": { "name": "error", "code": "INIT_FAILED" } },
+    {
+      "raw": { "v": 1, "type": "error", "payload": { "command": "identify", "code": "EXPIRED" } },
+      "event": { "name": "error", "code": "EXPIRED", "command": "identify" }
+    }
+  ],
+  "internalMessages": [
+    {
+      "raw": { "v": 1, "type": "session_changed", "payload": { "sessionToken": "sdk-session-123456", "identified": true, "externalId": "user-42" } },
+      "expect": { "sessionToken": "sdk-session-123456", "identified": true, "externalId": "user-42" }
+    },
+    { "raw": { "v": 1, "type": "close", "payload": null } },
+    { "raw": { "v": 1, "type": "open_url", "payload": { "url": "https://wa.me/5511999999999" } }, "expect": { "url": "https://wa.me/5511999999999" } },
+    {
+      "raw": { "v": 1, "type": "download", "payload": { "url": "https://chat.atalia.ai/media/x.pdf", "filename": "boleto.pdf", "mimeType": "application/pdf" } },
+      "expect": { "url": "https://chat.atalia.ai/media/x.pdf", "filename": "boleto.pdf", "mimeType": "application/pdf" }
+    }
+  ],
+  "ignored": [
+    { "v": 2, "type": "algo_de_uma_versao_futura", "payload": {} },
+    { "v": 1, "payload": {} },
+    "isto não é JSON"
+  ]
+}

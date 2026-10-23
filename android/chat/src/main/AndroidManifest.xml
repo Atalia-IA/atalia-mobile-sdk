@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!--
+      Câmera e microfone NÃO são declarados aqui de propósito: a permissão entraria em todo app
+      que usa o SDK. Quem quiser nota de voz declara RECORD_AUDIO e MODIFY_AUDIO_SETTINGS no
+      próprio manifest (ver README). Foto pela câmera funciona sem permissão quando o app não
+      declara CAMERA.
+    -->
+
+    <queries>
+        <intent>
+            <action android:name="android.media.action.IMAGE_CAPTURE" />
+        </intent>
+    </queries>
+
+    <application>
+        <activity
+            android:name="ai.atalia.chat.AtaliaChatActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.AtaliaChat"
+            android:windowSoftInputMode="adjustResize" />
+
+        <provider
+            android:name="ai.atalia.chat.internal.AtaliaFileProvider"
+            android:authorities="${applicationId}.atalia.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/atalia_file_paths" />
+        </provider>
+    </application>
+</manifest>

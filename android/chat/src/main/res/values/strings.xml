@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="atalia_chat_load_error">Não foi possível carregar o chat. Verifique sua conexão.</string>
+    <string name="atalia_chat_retry">Tentar de novo</string>
+    <string name="atalia_chat_close">Fechar</string>
+    <string name="atalia_chat_download_started">Baixando o arquivo…</string>
+    <string name="atalia_chat_no_app_for_link">Nenhum app para abrir este link</string>
+</resources>

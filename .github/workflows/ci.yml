@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  ios:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Testes (núcleo, no macOS)
+        run: swift test
+      - name: Build para iOS (inclui a tela do chat)
+        run: xcodebuild -scheme AtaliaChat -destination 'generic/platform=iOS Simulator' build
+
+  android:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Testes, AAR e app de exemplo
+        run: ./gradlew :chat:testDebugUnitTest :chat:assembleRelease :sample:assembleDebug

@@ -1,0 +1,34 @@
+{
+  "cases": [
+    {
+      "name": "canal na Atalia, sessão e conversa",
+      "baseUrl": "https://chat.atalia.ai",
+      "channelToken": "wct_abc123",
+      "customDomain": false,
+      "fragment": {
+        "protocol": 1,
+        "platform": "android",
+        "sdkVersion": "0.1.0",
+        "appVersion": "3.2.1",
+        "session": "sdk-session-123456",
+        "conversationId": 101,
+        "closeButton": true
+      },
+      "expectedPrefix": "https://chat.atalia.ai/chat/wct_abc123?sdk=1#sdk="
+    },
+    {
+      "name": "domínio próprio, sem sessão ainda",
+      "baseUrl": "https://chat.cliente.com.br",
+      "channelToken": "wct_abc123",
+      "customDomain": true,
+      "fragment": {
+        "protocol": 1,
+        "platform": "ios",
+        "sdkVersion": "0.1.0",
+        "appVersion": "1.0",
+        "closeButton": false
+      },
+      "expectedPrefix": "https://chat.cliente.com.br/?sdk=1#sdk="
+    }
+  ]
+}
