@@ -14,7 +14,7 @@ android {
         versionCode = 1
         versionName = "1.0"
 
-        // ./gradlew :sample:installDebug -Patalia.channelToken=wct_... [-Patalia.baseUrl=https://staging-chat.atalia.ai]
+        // ./gradlew :sample:installDebug -Patalia.channelToken=<token-do-canal> [-Patalia.baseUrl=<outra-origem>]
         val token = (project.findProperty("atalia.channelToken") as String?) ?: ""
         val baseUrl = (project.findProperty("atalia.baseUrl") as String?) ?: "https://chat.atalia.ai"
         buildConfigField("String", "ATALIA_CHANNEL_TOKEN", "\"$token\"")

@@ -2,7 +2,7 @@
 
 Os SDKs abrem o chat da Atalia num WebView e conversam com ele por um bridge. Este diretório guarda o contrato que os quatro SDKs (Android, iOS, React Native e Flutter) precisam entender do mesmo jeito.
 
-A fonte da verdade é o widget (`public/webchat.js` no repositório da plataforma). Os arquivos em `fixtures/` são lidos pelos testes de cada SDK: mudou o contrato, muda a fixture, e os testes de todas as plataformas acusam.
+A fonte da verdade é o widget que a Atalia serve em `<baseUrl>/webchat.js`. Os arquivos em `fixtures/` são lidos pelos testes de cada SDK: mudou o contrato, muda a fixture, e os testes de todas as plataformas acusam.
 
 ## Abrir o chat
 
@@ -57,7 +57,7 @@ Mensagem com `type` desconhecido, sem `type` ou que não seja JSON é **ignorada
 | `open_home` | `null` |
 | `app_state` | `{ state: "background" \| "foreground" }` |
 
-`app_state` não é opcional: em segundo plano o widget fecha o WebSocket e avisa a Atalia que o visitante saiu. É isso que libera as notificações push.
+`app_state` não é opcional: em segundo plano o widget fecha o WebSocket e avisa a Atalia que o visitante saiu. Sem o aviso, o visitante continua contando como conectado, e é por esse sinal que as notificações push (próxima versão) vão saber quando avisar.
 
 ## Convenções
 

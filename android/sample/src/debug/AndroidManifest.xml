@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Só no build de debug: permite apontar o exemplo para `npm run dev` no computador
-         (http://10.0.2.2:8787 no emulador). O release segue só com HTTPS. -->
+    <!-- Só no build de debug: permite apontar o exemplo para um servidor local sem HTTPS
+         (no emulador, o computador é http://10.0.2.2). O release segue só com HTTPS. -->
     <application android:usesCleartextTraffic="true" />
 </manifest>

@@ -11,8 +11,8 @@ O chat de atendimento da [Atalia](https://atalia.ai) dentro do seu app Android o
 
 | Plataforma | Requisito | Pacote |
 |---|---|---|
-| iOS | iOS 15+, Xcode 15+ | Swift Package Manager: `https://github.com/Atalia-IA/atalia-mobile-sdk` |
-| Android | Android 7.0 (API 24)+ | `ai.atalia:chat` |
+| iOS | iOS 15+ (testado com Xcode 26) | Swift Package Manager: `https://github.com/Atalia-IA/atalia-mobile-sdk` |
+| Android | Android 7.0 (API 24)+ | `ai.atalia:chat` (Maven Central) |
 
 ## Como funciona
 
@@ -114,6 +114,7 @@ await Atalia.logout()
 ```
 
 ```kotlin title="Android"
+// dentro de uma corrotina (ex.: lifecycleScope.launch { ... })
 val contact = Atalia.identify(tokenDoSeuBackend)
 // no logout do app:
 Atalia.logout()
@@ -124,7 +125,7 @@ Regras do JWT:
 - vale no máximo 1 hora;
 - gere um novo a cada chamada: token com `jti` é recusado se for usado de novo (`REPLAYED`).
 
-Como gerar o token e os códigos de erro (`EXPIRED`, `INVALID_SIGNATURE`...): veja a página "Identificação de usuários no Webchat" na documentação da Atalia.
+Como gerar o token no seu backend e o que significa cada código de erro (`EXPIRED`, `INVALID_SIGNATURE`...): [Identificação de usuários no Webchat](https://chat.atalia.ai/docs/ajuda/webchat-identificacao).
 
 ## Eventos
 
@@ -152,12 +153,16 @@ Atalia.events.collect { event ->
 
 ## Opções
 
+Passadas no `configure` (`AtaliaOptions`):
+
 | Opção | Padrão | Para quê |
 |---|---|---|
-| `baseUrl` | `https://chat.atalia.ai` | Homologação, ou o domínio próprio do canal |
-| `customDomain` | `false` | `true` quando `baseUrl` é o domínio próprio vinculado ao canal |
+| `baseURL` (iOS) / `baseUrl` (Android) | `https://chat.atalia.ai` | Outro ambiente, ou o domínio próprio do canal |
+| `customDomain` | `false` | `true` quando a origem é o domínio próprio vinculado ao canal |
 | `closeButton` | `true` | Desligue quando o chat for uma aba do app |
-| `debug` | `false` | Inspecionar o WebView (Safari / `chrome://inspect`) |
+| `presentationStyle` (só iOS) | `.fullScreen` | `.pageSheet` abre como folha |
+| `urlHandler` (só Android) | nenhum | Decide como abrir os links tocados no chat. No iOS: `Atalia.urlHandler` |
+| `debug` | `false` | Inspecionar o WebView (Safari / `chrome://inspect`). Nunca em produção |
 
 ## Privacidade
 
@@ -166,6 +171,8 @@ Atalia.events.collect { event ->
 - No formulário de privacidade da App Store e do Google Play, declare o que o chat coleta no seu caso: mensagens e anexos, mais nome e e-mail se você identifica o usuário.
 
 ## Desenvolvimento
+
+O Android pede o JDK 17 (o do Android Studio serve).
 
 ```bash
 swift test                                    # iOS: núcleo, roda no macOS

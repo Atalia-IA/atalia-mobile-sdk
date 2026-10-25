@@ -45,6 +45,8 @@ Se falhar antes do último passo, nada foi publicado. Para tentar de novo:
 2. A versão aparece como **Validated**. Confira os arquivos e clique em **Publish**.
 3. Em até ~30 minutos `ai.atalia:chat:<versão>` fica disponível para o Gradle.
 
+Antes do **Publish** ainda dá para voltar atrás: **Drop** descarta o envio, e a mesma versão pode ser enviada de novo. Se o portal mostrar **Failed** (assinatura, POM), leia o motivo, clique em **Drop**, corrija e refaça o release.
+
 ## Secrets do repositório (uma vez só)
 
 Em **Settings › Secrets and variables › Actions › New repository secret**:
