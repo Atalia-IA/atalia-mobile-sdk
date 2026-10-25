@@ -55,25 +55,32 @@ public enum Atalia {
     }
 
     // MARK: Push
+    //
+    // As funções de push podem ser chamadas de qualquer thread: os delegates do iOS e do
+    // Firebase não garantem a main thread.
 
     /// Token do Firebase Cloud Messaging (a Atalia envia pelo Firebase do app). Chame no
     /// `messaging(_:didReceiveRegistrationToken:)` do `MessagingDelegate`. O SDK registra o
     /// aparelho na Atalia e o mantém registrado quando o usuário entra ou sai.
-    public static func setPushToken(_ token: String) {
-        Task { await AtaliaCore.shared.setPushToken(StoredPushToken(token: token, provider: "fcm", environment: nil)) }
+    public nonisolated static func setPushToken(_ token: String) {
+        Task { @MainActor in
+            await AtaliaCore.shared.setPushToken(StoredPushToken(token: token, provider: "fcm", environment: nil))
+        }
     }
 
     /// Token do APNs, para quem entrega pelo próprio backend (webhook). Chame no
     /// `application(_:didRegisterForRemoteNotificationsWithDeviceToken:)`. Com o Firebase, use
     /// `setPushToken(_:)` com o token do Firebase.
-    public static func setAPNsToken(_ deviceToken: Data, environment: AtaliaPushEnvironment) {
+    public nonisolated static func setAPNsToken(_ deviceToken: Data, environment: AtaliaPushEnvironment) {
         let hex = deviceToken.map { String(format: "%02x", $0) }.joined()
-        Task { await AtaliaCore.shared.setPushToken(StoredPushToken(token: hex, provider: "apns", environment: environment.rawValue)) }
+        Task { @MainActor in
+            await AtaliaCore.shared.setPushToken(StoredPushToken(token: hex, provider: "apns", environment: environment.rawValue))
+        }
     }
 
     /// Tira o aparelho da Atalia (o usuário desligou as notificações do atendimento no app).
-    public static func clearPushToken() {
-        Task { await AtaliaCore.shared.clearPushToken() }
+    public nonisolated static func clearPushToken() {
+        Task { @MainActor in await AtaliaCore.shared.clearPushToken() }
     }
 
     /// A notificação veio da Atalia? Use antes de tratar as suas.
@@ -86,22 +93,22 @@ public enum Atalia {
     /// Atualiza as não lidas e devolve `[]` quando o chat já está na tela (a mensagem aparece
     /// nele); senão banner, lista, som e badge.
     /// - Returns: nil quando a notificação não é da Atalia (trate como as suas).
-    public static func presentationOptions(for notification: UNNotification) -> UNNotificationPresentationOptions? {
+    public nonisolated static func presentationOptions(for notification: UNNotification) -> UNNotificationPresentationOptions? {
         guard PushPayload(notification.request.content.userInfo) != nil else { return nil }
-        let core = AtaliaCore.shared
-        if core.configuration != nil {
-            Task { _ = try? await core.refreshUnread() }
-        }
-        return core.shouldShowNotification() ? [.banner, .list, .sound, .badge] : []
+        Task { @MainActor in _ = try? await AtaliaCore.shared.refreshUnread() }
+        return ChatPresence.shared.isVisible ? [] : [.banner, .list, .sound, .badge]
     }
 
     /// Toque na notificação (`userNotificationCenter(_:didReceive:withCompletionHandler:)`): abre
     /// o chat na conversa dela, inclusive quando o toque é que abriu o app.
     /// - Returns: false quando a notificação não é da Atalia.
     @discardableResult
-    public static func handleNotificationTap(_ userInfo: [AnyHashable: Any]) -> Bool {
-        guard let payload = PushPayload(userInfo), AtaliaCore.shared.configuration != nil else { return false }
-        presentWhenActive(conversationId: payload.conversationId)
+    public nonisolated static func handleNotificationTap(_ userInfo: [AnyHashable: Any]) -> Bool {
+        guard let payload = PushPayload(userInfo) else { return false }
+        Task { @MainActor in
+            guard AtaliaCore.shared.configuration != nil else { return }
+            presentWhenActive(conversationId: payload.conversationId)
+        }
         return true
     }
 

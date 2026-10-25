@@ -187,6 +187,7 @@ override fun onNewIntent(intent: Intent) {
 - **Android 13+:** declare `POST_NOTIFICATIONS` no manifest e peça a permissão ao usuário. Sem ela, nenhuma notificação aparece.
 - **Ícone:** `AtaliaOptions(notificationIcon = R.drawable.ic_notificacao)` vale para o app aberto. Com o app em segundo plano, o ícone vem do `com.google.firebase.messaging.default_notification_icon` do manifest, como em qualquer push do Firebase.
 - O SDK cria o canal de notificação "Mensagens do atendimento" (`atalia_chat`).
+- Quando o usuário lê tudo, as notificações da Atalia saem da bandeja, e com elas a bolinha do ícone. As do seu app ficam.
 
 ### iOS
 
@@ -210,20 +211,23 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         return true
     }
 
-    func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
+    // `nonisolated` nos três abaixo: o iOS e o Firebase podem chamá-los fora da main thread.
+    // As funções de push da Atalia podem ser chamadas de qualquer thread.
+
+    nonisolated func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
         if let fcmToken { Atalia.setPushToken(fcmToken) }
     }
 
     // App aberto: sem banner quando o chat já está na tela.
-    func userNotificationCenter(_ center: UNUserNotificationCenter,
-                                willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                            willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
         if let options = Atalia.presentationOptions(for: notification) { return options }
         return [.banner, .sound] // as notificações do seu app
     }
 
     // Toque: abre o chat na conversa, inclusive quando o toque é que abriu o app.
-    func userNotificationCenter(_ center: UNUserNotificationCenter,
-                                didReceive response: UNNotificationResponse) async {
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                            didReceive response: UNNotificationResponse) async {
         if Atalia.handleNotificationTap(response.notification.request.content.userInfo) { return }
         // ...as notificações do seu app
     }
@@ -232,7 +236,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
 
 Em SwiftUI, ligue o `AppDelegate` com `@UIApplicationDelegateAdaptor(AppDelegate.self)`.
 
-O número no ícone do app vem da Atalia: são as não lidas do usuário. Se o seu app tem contador próprio, some o `Atalia.unreadCount` ao seu.
+O número no ícone do app vem da Atalia: são as não lidas do usuário. O SDK o mantém atualizado e, quando o usuário lê tudo, tira da Central de Notificações as notificações da Atalia (as do seu app ficam). Se o seu app tem contador próprio no ícone, desligue com `AtaliaOptions(appBadge: false)`: aí nem o SDK nem o push da Atalia mexem no número, e você pode somar o `Atalia.unreadCount` ao seu.
 
 ### Modo webhook
 
@@ -282,6 +286,7 @@ Passadas no `configure` (`AtaliaOptions`):
 | `presentationStyle` (só iOS) | `.fullScreen` | `.pageSheet` abre como folha |
 | `urlHandler` (só Android) | nenhum | Decide como abrir os links tocados no chat. No iOS: `Atalia.urlHandler` |
 | `notificationIcon` (só Android) | ícone do app | Ícone da notificação mostrada com o app aberto |
+| `appBadge` (só iOS) | `true` | Com o push ligado, o número no ícone do app acompanha as não lidas. Desligue se o app tem contador próprio: o push da Atalia também deixa de mexer nele |
 | `debug` | `false` | Inspecionar o WebView (Safari / `chrome://inspect`). Nunca em produção |
 
 ## Privacidade

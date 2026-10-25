@@ -7,6 +7,7 @@ final class PushTests: XCTestCase {
     private let base = "/api/webchat/wct_test"
     private var core: AtaliaCore!
     private var store: MemorySessionStore!
+    private var surface: FakeNotificationSurface!
 
     override func setUp() async throws {
         StubURLProtocol.reset()
@@ -16,20 +17,22 @@ final class PushTests: XCTestCase {
         StubURLProtocol.stubs["POST \(base)/push/devices"] = .init(status: 200, json: ["ok": true])
         StubURLProtocol.stubs["DELETE \(base)/push/devices"] = .init(status: 204, json: nil)
         store = MemorySessionStore()
+        surface = FakeNotificationSurface()
     }
 
     /// Cria o núcleo e espera as tarefas do `configure` (marca, não lidas, registro pendente).
-    private func configure() async {
+    private func configure(options: AtaliaOptions = AtaliaOptions()) async {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [StubURLProtocol.self]
         let api = APIClient(baseURL: URL(string: "https://chat.atalia.ai")!, channelToken: "wct_test", session: URLSession(configuration: configuration))
         if core == nil { core = AtaliaCore() }
         core.configure(
             channelToken: "wct_test",
-            options: AtaliaOptions(),
+            options: options,
             api: api,
             store: store,
-            deviceInfo: { ["platform": "ios", "app_id": "com.loja"] }
+            deviceInfo: { ["platform": "ios", "app_id": "com.loja"] },
+            notifications: surface
         )
         for _ in 0..<20 { await Task.yield() }
         try? await Task.sleep(nanoseconds: 50_000_000)
@@ -83,6 +86,7 @@ final class PushTests: XCTestCase {
         XCTAssertEqual(registered.first?.body["provider"] as? String, "fcm")
         XCTAssertEqual(registered.first?.body["app_id"] as? String, "com.loja")
         XCTAssertNil(registered.first?.body["environment"])
+        XCTAssertNil(registered.first?.body["badge"], "padrão: a Atalia cuida do número no ícone")
     }
 
     func testAPNsTokenCarriesEnvironment() async throws {
@@ -184,6 +188,42 @@ final class PushTests: XCTestCase {
         XCTAssertTrue(registrations().isEmpty)
     }
 
+    func testBadgeFollowsUnreadAndReadNotificationsLeave() async throws {
+        store.save(StoredSession(token: "anon-1", identified: false, externalId: nil))
+        store.savePushToken(StoredPushToken(token: "apns-1", provider: "apns", environment: "sandbox"))
+        StubURLProtocol.stubs["GET \(base)/unread"] = .init(status: 200, json: ["total": 2, "conversations": []])
+        await configure()
+        XCTAssertEqual(surface.badges.last, 2)
+        XCTAssertEqual(surface.removals, 0, "ainda há não lidas: as notificações ficam")
+
+        // Lido no chat: o widget avisa e o ícone zera.
+        core.handle(BridgeMessage(body: #"{"v":1,"type":"unread_changed","payload":{"count":0}}"#)!)
+        XCTAssertEqual(surface.badges.last, 0)
+        XCTAssertEqual(surface.removals, 1)
+
+        // Mesma contagem de novo (o push pôs um número velho no ícone): sincroniza mesmo assim.
+        StubURLProtocol.stubs["GET \(base)/unread"] = .init(status: 200, json: ["total": 0, "conversations": []])
+        _ = try await core.refreshUnread()
+        XCTAssertEqual(surface.badges.count, 3)
+    }
+
+    func testNoPushNoBadge() async throws {
+        store.save(StoredSession(token: "anon-1", identified: false, externalId: nil))
+        await configure()
+        _ = try await core.refreshUnread()
+        XCTAssertTrue(surface.badges.isEmpty, "app sem o push da Atalia: o ícone é dele")
+        XCTAssertEqual(surface.removals, 0)
+    }
+
+    func testAppBadgeOffOnlyClearsNotifications() async throws {
+        store.save(StoredSession(token: "anon-1", identified: false, externalId: nil))
+        store.savePushToken(StoredPushToken(token: "apns-1", provider: "apns", environment: "sandbox"))
+        await configure(options: AtaliaOptions(appBadge: false))
+        XCTAssertTrue(surface.badges.isEmpty)
+        XCTAssertEqual(surface.removals, 1)
+        XCTAssertEqual(registrations().first?.body["badge"] as? Bool, false, "o push da Atalia também sai sem número no ícone")
+    }
+
     func testNotificationIsSuppressedWhileChatIsOnScreen() async {
         await configure()
         XCTAssertTrue(core.shouldShowNotification())
@@ -191,6 +231,28 @@ final class PushTests: XCTestCase {
         core.activeChat = chat
         XCTAssertFalse(core.shouldShowNotification())
     }
+}
+
+final class ChatPresenceTests: XCTestCase {
+    func testPresenceFollowsTheChatAndForgetsAReleasedOne() {
+        let presence = ChatPresence()
+        XCTAssertFalse(presence.isVisible)
+        var chat: NSObject? = NSObject()
+        presence.set(chat)
+        XCTAssertTrue(presence.isVisible)
+        chat = nil
+        XCTAssertNil(chat)
+        XCTAssertFalse(presence.isVisible, "tela que sumiu sem avisar conta como fechada")
+    }
+}
+
+@MainActor
+private final class FakeNotificationSurface: NotificationSurface {
+    var badges: [Int] = []
+    var removals = 0
+
+    func setBadge(_ count: Int) { badges.append(count) }
+    func removeDeliveredAtaliaNotifications() { removals += 1 }
 }
 
 @MainActor

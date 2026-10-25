@@ -229,16 +229,10 @@ public final class AtaliaChatViewController: UIViewController {
     /// A tarefa de segundo plano dá tempo de o aviso sair antes da suspensão.
     private func notifyAppState(_ state: String) {
         guard isReady, let webView else { return }
-        var backgroundTask = UIBackgroundTaskIdentifier.invalid
-        if state == "background" {
-            backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "atalia.app_state") {
-                UIApplication.shared.endBackgroundTask(backgroundTask)
-            }
-        }
+        let backgroundTask = AppStateBackgroundTask()
+        if state == "background" { backgroundTask.begin() }
         webView.evaluateJavaScript(Self.commandScript("app_state", payload: ["state": state])) { _, _ in
-            if backgroundTask != .invalid {
-                UIApplication.shared.endBackgroundTask(backgroundTask)
-            }
+            backgroundTask.end()
         }
     }
 
@@ -453,6 +447,23 @@ private final class WeakScriptMessageHandler: NSObject, WKScriptMessageHandler {
         MainActor.assumeIsolated {
             target?.receive(message)
         }
+    }
+}
+
+/// Tarefa de segundo plano do aviso `app_state`, encerrada uma vez só: quando o script termina ou
+/// quando o prazo do iOS acaba.
+@MainActor
+private final class AppStateBackgroundTask {
+    private var identifier = UIBackgroundTaskIdentifier.invalid
+
+    func begin() {
+        identifier = UIApplication.shared.beginBackgroundTask(withName: "atalia.app_state") { self.end() }
+    }
+
+    func end() {
+        guard identifier != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(identifier)
+        identifier = .invalid
     }
 }
 

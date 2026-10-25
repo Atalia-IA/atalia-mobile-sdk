@@ -20,19 +20,24 @@ public struct AtaliaOptions {
     public var presentationStyle: PresentationStyle
     /// Permite inspecionar o WebView pelo Safari (iOS 16.4+). Nunca em produção.
     public var debug: Bool
+    /// Com o push ligado, o número no ícone do app acompanha as não lidas da Atalia. Desligue se
+    /// o app tem contador próprio no ícone: aí nem o SDK nem o push da Atalia mexem no número.
+    public var appBadge: Bool
 
     public init(
         baseURL: URL = AtaliaOptions.defaultBaseURL,
         customDomain: Bool = false,
         closeButton: Bool = true,
         presentationStyle: PresentationStyle = .fullScreen,
-        debug: Bool = false
+        debug: Bool = false,
+        appBadge: Bool = true
     ) {
         self.baseURL = baseURL
         self.customDomain = customDomain
         self.closeButton = closeButton
         self.presentationStyle = presentationStyle
         self.debug = debug
+        self.appBadge = appBadge
     }
 }
 

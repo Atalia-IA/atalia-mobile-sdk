@@ -2,7 +2,7 @@ import Foundation
 
 /// `data` da notificação da Atalia (protocol/README.md, "Notificação push"). Igual no Firebase e
 /// no webhook: a chave `atalia = "1"` é o que separa da notificação de outras origens do app.
-struct PushPayload: Equatable {
+struct PushPayload: Equatable, Sendable {
     let channelToken: String?
     let conversationId: Int?
     let messageId: Int?

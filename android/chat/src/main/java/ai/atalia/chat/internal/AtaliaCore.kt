@@ -48,6 +48,8 @@ internal class AtaliaCore(
     private val deviceInfo: () -> JSONObject = { JSONObject().put("platform", "android") },
     /** Roda trabalho de fundo (re-registro do push depois de troca de sessão vinda do widget). */
     private val launchInBackground: (suspend () -> Unit) -> Unit = {},
+    /** Tira da bandeja as notificações da Atalia. */
+    private val clearNotifications: () -> Unit = {},
 ) {
     private val sessionMutex = Mutex()
     private val pushMutex = Mutex()
@@ -136,6 +138,7 @@ internal class AtaliaCore(
         registeredPush = null
         state.identified.value = false
         setUnread(0)
+        syncNotifications(0)
         emit(AtaliaEvent.LoggedOut)
         // O logout apagou os aparelhos da sessão no servidor: o aparelho volta como visitante anônimo.
         runCatching { registerPushTokenIfNeeded() }
@@ -184,13 +187,23 @@ internal class AtaliaCore(
     suspend fun refreshUnread(): Int {
         val token = store.load()?.token ?: run {
             setUnread(0)
+            syncNotifications(0)
             return 0
         }
         val response = api.unread(token)
         if (!response.isSuccess) throw AtaliaException(response.code ?: "UNREAD_FAILED")
         val total = (response.json?.opt("total") as? Number)?.toInt() ?: 0
         setUnread(total)
+        syncNotifications(total)
         return total
+    }
+
+    /**
+     * Tudo lido: as notificações da Atalia saem da bandeja, e com elas a bolinha do ícone do app.
+     * Só com push ligado.
+     */
+    private fun syncNotifications(unread: Int) {
+        if (unread == 0 && store.loadPushToken() != null) clearNotifications()
     }
 
     private fun setUnread(count: Int) {
@@ -224,7 +237,10 @@ internal class AtaliaCore(
                     launchInBackground { runCatching { registerPushTokenIfNeeded() } }
                 }
             }
-            "unread_changed" -> message.long("count")?.let { state.unread.value = it.toInt() }
+            "unread_changed" -> message.long("count")?.let {
+                state.unread.value = it.toInt()
+                syncNotifications(it.toInt())
+            }
             "identified" -> state.identified.value = true
             "logout" -> state.identified.value = false
         }

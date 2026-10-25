@@ -75,6 +75,7 @@ object Atalia {
             dispatchToMain = ::runOnMain,
             deviceInfo = { deviceInfo(appContext) },
             launchInBackground = { block -> scope.launch { block() } },
+            clearNotifications = { AtaliaNotifications.cancelAll(appContext) },
         )
         core = created
         AtaliaNotifications.ensureChannel(appContext)

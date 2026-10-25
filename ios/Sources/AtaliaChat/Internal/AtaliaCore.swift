@@ -23,7 +23,11 @@ final class AtaliaCore {
 
     private(set) var configuration: Configuration?
     let state = AtaliaState()
-    weak var activeChat: ChatBridgeTarget?
+    weak var activeChat: ChatBridgeTarget? {
+        didSet {
+            if self === AtaliaCore.shared { ChatPresence.shared.set(activeChat) }
+        }
+    }
     /// Cor primária do canal (cabeçalho do chat), para a barra de status combinar antes de a página carregar.
     private(set) var primaryColorHex: String?
 
@@ -38,6 +42,8 @@ final class AtaliaCore {
     private var registeredPush: (session: String, token: String)?
     /// Último registro do push na fila. Um de cada vez, na ordem pedida.
     private(set) var pushTask: Task<Void, Never>?
+    /// Ícone do app e Central de Notificações (nil fora de um app iOS).
+    private var notificationSurface: NotificationSurface?
     #if canImport(UIKit)
     private var foregroundObserver: NSObjectProtocol?
     #endif
@@ -47,12 +53,14 @@ final class AtaliaCore {
         options: AtaliaOptions,
         api: APIClient? = nil,
         store: SessionStoring? = nil,
-        deviceInfo: (() -> [String: Any])? = nil
+        deviceInfo: (() -> [String: Any])? = nil,
+        notifications: NotificationSurface? = nil
     ) {
         let api = api ?? APIClient(baseURL: options.baseURL, channelToken: channelToken)
         let store = store ?? KeychainSessionStore(baseURL: options.baseURL, channelToken: channelToken)
         configuration = Configuration(channelToken: channelToken, options: options, api: api, store: store)
         if let deviceInfo { self.deviceInfo = deviceInfo }
+        notificationSurface = notifications ?? AtaliaCore.systemNotificationSurface()
         registeredPush = nil
         if let pending = pendingPushToken {
             store.savePushToken(pending)
@@ -161,6 +169,7 @@ final class AtaliaCore {
         registeredPush = nil
         state.isIdentified = false
         setUnread(0)
+        syncNotifications(unread: 0)
         emit(.loggedOut)
         // O logout apagou os aparelhos da sessão no servidor: o aparelho volta como visitante anônimo.
         await registerPushTokenIfNeeded()
@@ -233,6 +242,8 @@ final class AtaliaCore {
         body["token"] = push.token
         body["provider"] = push.provider
         if let environment = push.environment { body["environment"] = environment }
+        // App com contador próprio no ícone: o push da Atalia também sai sem número.
+        if configuration?.options.appBadge == false { body["badge"] = false }
         return body
     }
 
@@ -256,12 +267,14 @@ final class AtaliaCore {
         let config = try requireConfiguration()
         guard let token = config.store.load()?.token else {
             setUnread(0)
+            syncNotifications(unread: 0)
             return 0
         }
         let response = try await config.api.unread(sessionToken: token)
         guard response.isSuccess else { throw AtaliaError(code: response.code ?? "UNREAD_FAILED") }
         let total = response.json?["total"] as? Int ?? 0
         setUnread(total)
+        syncNotifications(unread: total)
         return total
     }
 
@@ -269,6 +282,24 @@ final class AtaliaCore {
         guard state.unreadCount != count else { return }
         state.unreadCount = count
         emit(.unreadChanged(count: count))
+    }
+
+    /// O número no ícone vem do push da Atalia e o iOS nunca o zera sozinho: ele acompanha as
+    /// não lidas a cada consulta, mesmo sem mudança (o push pode ter posto um número velho). Com
+    /// tudo lido, as notificações da Atalia saem da Central. Só com push ligado, para não mexer
+    /// no ícone de app que não usa o push da Atalia.
+    private func syncNotifications(unread count: Int) {
+        guard let config = configuration, let surface = notificationSurface, config.store.loadPushToken() != nil else { return }
+        if config.options.appBadge { surface.setBadge(count) }
+        if count == 0 { surface.removeDeliveredAtaliaNotifications() }
+    }
+
+    private static func systemNotificationSurface() -> NotificationSurface? {
+        #if canImport(UIKit)
+        return SystemNotificationSurface()
+        #else
+        return nil
+        #endif
     }
 
     // MARK: Bridge
@@ -287,7 +318,10 @@ final class AtaliaCore {
                 }
             }
         case "unread_changed":
-            if let count = message.int("count") { state.unreadCount = count }
+            if let count = message.int("count") {
+                state.unreadCount = count
+                syncNotifications(unread: count)
+            }
         case "identified":
             state.isIdentified = true
         case "logout":

@@ -58,6 +58,7 @@ class PushTest {
     private val api = FakeApi()
     private val store = MemorySessionStorage()
     private val background = mutableListOf<suspend () -> Unit>()
+    private var cleared = 0
     private val core = AtaliaCore(
         channelToken = "wct_test",
         options = AtaliaOptions(),
@@ -66,6 +67,7 @@ class PushTest {
         state = AtaliaStateHolder(),
         deviceInfo = { JSONObject().put("platform", "android").put("app_id", "com.loja") },
         launchInBackground = { background += it },
+        clearNotifications = { cleared++ },
     )
 
     @Test
@@ -156,6 +158,25 @@ class PushTest {
     fun noTokenNoRegistration() = runTest {
         core.registerPushTokenIfNeeded()
         assertTrue(api.calls.isEmpty())
+    }
+
+    @Test
+    fun readNotificationsLeaveTheTray() = runTest {
+        store.save(StoredSession("anon-1", identified = false, externalId = null))
+        core.setPushToken("fcm-1")
+        core.handle(BridgeMessage.parse("""{"v":1,"type":"unread_changed","payload":{"count":2}}""")!!)
+        assertEquals("ainda há não lidas", 0, cleared)
+        core.handle(BridgeMessage.parse("""{"v":1,"type":"unread_changed","payload":{"count":0}}""")!!)
+        assertEquals(1, cleared)
+        core.refreshUnread()
+        assertEquals("a consulta também limpa, mesmo sem mudança", 2, cleared)
+    }
+
+    @Test
+    fun noPushNoTrayCleanup() = runTest {
+        store.save(StoredSession("anon-1", identified = false, externalId = null))
+        core.refreshUnread()
+        assertEquals(0, cleared)
     }
 
     @Test

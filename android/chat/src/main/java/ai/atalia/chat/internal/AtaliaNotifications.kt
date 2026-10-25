@@ -42,7 +42,7 @@ internal object AtaliaNotifications {
         if (!manager.areNotificationsEnabled()) return false
         ensureChannel(context)
 
-        val tag = payload.conversationId?.let { "atalia-conv-$it" } ?: "atalia-chat"
+        val tag = payload.conversationId?.let { "${TAG_PREFIX}conv-$it" } ?: "${TAG_PREFIX}chat"
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(smallIcon)
             .setContentTitle(title?.takeIf { it.isNotBlank() } ?: context.getString(R.string.atalia_chat_notification_fallback_title))
@@ -62,6 +62,17 @@ internal object AtaliaNotifications {
         }
     }
 
+    /**
+     * Tira da bandeja as notificações da Atalia, as do SDK e as que o sistema mostrou a partir do
+     * Firebase (mesma tag). As do próprio app ficam.
+     */
+    fun cancelAll(context: Context) {
+        val manager = context.getSystemService(NotificationManager::class.java) ?: return
+        manager.activeNotifications
+            .filter { it.tag?.startsWith(TAG_PREFIX) == true }
+            .forEach { manager.cancel(it.tag, it.id) }
+    }
+
     /** Toque: abre o chat por cima do app (o "voltar" leva ao app, não a uma tela vazia). */
     private fun openChatIntent(context: Context, conversationId: Long?, requestCode: Int): PendingIntent? {
         val chat = Intent(context, AtaliaChatActivity::class.java)
@@ -74,4 +85,5 @@ internal object AtaliaNotifications {
     }
 
     private const val NOTIFICATION_ID = 1
+    private const val TAG_PREFIX = "atalia-"
 }
