@@ -23,7 +23,7 @@ Os três arquivos acima, mais o `react-native/package-lock.json` (rode `npm inst
 ## 2. Criar o release no GitHub
 
 1. Abra **Releases › Draft a new release**.
-2. Em **Choose a tag**, digite a versão (`0.3.0`, sem "v") e crie a tag.
+2. Em **Choose a tag**, digite a versão (`0.4.0`, sem "v") e crie a tag.
 3. Título igual à versão; cole as notas do CHANGELOG.
 4. **Publish release.**
 
@@ -53,7 +53,7 @@ Antes do **Publish** ainda dá para voltar atrás: **Drop** descarta o envio, e 
 
 Só depois que o Maven Central mostrar a versão (passo 4): o pacote React Native usa no Android o `ai.atalia:chat` da mesma versão, e publicar antes quebraria o build de quem instalasse na hora.
 
-1. Aba **Actions** › **Publicar no npm** › **Run workflow**, com a versão (`0.3.0`).
+1. Aba **Actions** › **Publicar no npm** › **Run workflow**, com a versão (`0.4.0`).
 2. O workflow confere que a versão já está no Maven Central, roda os testes e publica `@atalia/react-native-chat` com procedência (provenance).
 
 No npm também nada se apaga depois de 72 horas: versão errada se corrige com a próxima.

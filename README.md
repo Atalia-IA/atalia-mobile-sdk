@@ -7,7 +7,7 @@ O chat de atendimento da [Atalia](https://atalia.ai) dentro do seu app Android, 
 - avaliação do atendimento e horário de atendimento;
 - histórico do usuário logado.
 
-> **Versão 0.3.0.** Até a 1.0 a API ainda pode mudar entre versões; o [CHANGELOG](CHANGELOG.md) diz o que mudou.
+> **Versão 0.4.0.** Até a 1.0 a API ainda pode mudar entre versões; o [CHANGELOG](CHANGELOG.md) diz o que mudou.
 
 | Plataforma | Requisito | Pacote |
 |---|---|---|
@@ -73,7 +73,7 @@ Sem a do microfone, o SDK nega o pedido e o chat mostra um aviso: o app não fec
 
 ```kotlin title="build.gradle.kts"
 dependencies {
-    implementation("ai.atalia:chat:0.3.0")
+    implementation("ai.atalia:chat:0.4.0")
 }
 ```
 

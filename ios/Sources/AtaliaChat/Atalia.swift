@@ -12,7 +12,7 @@ import UserNotifications
 /// ```
 @MainActor
 public enum Atalia {
-    public nonisolated static let sdkVersion = "0.3.0"
+    public nonisolated static let sdkVersion = "0.4.0"
 
     /// Chame uma vez, no início do app (ex.: `application(_:didFinishLaunchingWithOptions:)`).
     /// O token do canal fica em Configurações › Canais › Webchat, no painel da Atalia.

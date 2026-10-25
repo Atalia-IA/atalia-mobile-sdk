@@ -2,7 +2,9 @@
 
 Versões seguem [SemVer](https://semver.org/lang/pt-BR/). O protocolo do bridge tem versão própria (ver [protocol/README.md](protocol/README.md)).
 
-## Não lançado
+## 0.4.0 (2026-10-25)
+
+Botão flutuante novo e chat em folha, Android, iOS e React Native.
 
 - Botão flutuante novo (Android e iOS): pílula branca com o título e o nome do atendimento saindo de trás do círculo, efeito elástico ao puxar, puxar até a borda esconde numa aba (tocar ou puxar a aba traz de volta), halo no toque, vibração leve, pulo na mensagem nova e entrada animada. Opções novas `subtitle`, `dockable` e `preloadChat`.
 - O chat abre numa folha que sobe sobre o app, o novo padrão. Android: `AtaliaOptions(presentation = SHEET)`, com o fundo escurecido; arrastar a alça ou tocar fora fecha. iOS: `presentationStyle: .pageSheet` (antes `.fullScreen`), a folha do sistema com a alça; `.ataliaChat(isPresented:)` segue a mesma opção. React Native: `presentationStyle` passa a valer também no Android.
