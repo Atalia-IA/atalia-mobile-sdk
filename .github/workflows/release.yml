@@ -1,0 +1,74 @@
+name: Release
+
+# Publicar um release no GitHub (tag = versão, ex.: 0.1.0) dispara tudo:
+# - iOS: a própria tag já é a versão que o Swift Package Manager enxerga;
+# - Android: sobe para o Maven Central e fica esperando o "Publish" em central.sonatype.com.
+# Passo a passo em RELEASING.md.
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Conferir a versão da tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          if ! [[ "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+            echo "::error::A tag '$TAG' não é uma versão. Use o formato 0.1.0, sem 'v'."
+            exit 1
+          fi
+          grep -q "const val SDK_VERSION = \"$TAG\"" android/chat/src/main/java/ai/atalia/chat/Atalia.kt \
+            || { echo "::error::Atalia.SDK_VERSION (Android) não é $TAG"; exit 1; }
+          grep -q "sdkVersion = \"$TAG\"" ios/Sources/AtaliaChat/Atalia.swift \
+            || { echo "::error::Atalia.sdkVersion (iOS) não é $TAG"; exit 1; }
+
+  ios:
+    needs: verify
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Testes (núcleo, no macOS)
+        run: swift test
+      - name: Build para iOS
+        run: xcodebuild -scheme AtaliaChat -destination 'generic/platform=iOS Simulator' build
+
+  android:
+    needs: [verify, ios]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Conferir os secrets
+        env:
+          MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: |
+          for name in MAVEN_CENTRAL_USERNAME MAVEN_CENTRAL_PASSWORD SIGNING_KEY SIGNING_KEY_PASSWORD; do
+            [ -n "${!name}" ] || { echo "::error::Secret $name não cadastrado (Settings › Secrets and variables › Actions)"; exit 1; }
+          done
+      - name: Testes
+        run: ./gradlew :chat:testDebugUnitTest
+      - name: Publicar no Maven Central
+        env:
+          TAG: ${{ github.ref_name }}
+          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: ./gradlew :chat:publishToMavenCentral -PVERSION_NAME="$TAG" --no-configuration-cache

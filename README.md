@@ -173,7 +173,7 @@ cd android && ./gradlew :chat:testDebugUnitTest   # Android: testes de JVM
 cd android && ./gradlew :sample:installDebug -Patalia.channelToken=<token>   # app de exemplo
 ```
 
-O contrato com o chat (bridge) está em [protocol/README.md](protocol/README.md), e os testes das duas plataformas leem as mesmas fixtures de `protocol/fixtures/`.
+O contrato com o chat (bridge) está em [protocol/README.md](protocol/README.md), e os testes das duas plataformas leem as mesmas fixtures de `protocol/fixtures/`. Para lançar uma versão, veja [RELEASING.md](RELEASING.md).
 
 ## Licença
 
