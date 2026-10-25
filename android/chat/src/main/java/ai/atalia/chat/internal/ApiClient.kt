@@ -28,6 +28,11 @@ internal interface AtaliaApi {
 
     /** `{ total, conversations: [{ id, unread_count }] }`. */
     suspend fun unread(sessionToken: String): ApiResponse
+
+    /** Registra (ou atualiza) o aparelho do push na sessão. 401 `SESSION_EXPIRED` = sessão morta. */
+    suspend fun registerPushDevice(sessionToken: String, device: JSONObject): ApiResponse
+
+    suspend fun unregisterPushDevice(sessionToken: String, pushToken: String): ApiResponse
 }
 
 internal class HttpApiClient(
@@ -48,6 +53,12 @@ internal class HttpApiClient(
     override suspend fun logout(sessionToken: String) = send("POST", "/logout", sessionToken)
 
     override suspend fun unread(sessionToken: String) = send("GET", "/unread", sessionToken)
+
+    override suspend fun registerPushDevice(sessionToken: String, device: JSONObject) =
+        send("POST", "/push/devices", sessionToken, device)
+
+    override suspend fun unregisterPushDevice(sessionToken: String, pushToken: String) =
+        send("DELETE", "/push/devices", sessionToken, JSONObject().put("token", pushToken))
 
     private suspend fun send(method: String, path: String, sessionToken: String? = null, body: JSONObject? = null): ApiResponse =
         withContext(io) {

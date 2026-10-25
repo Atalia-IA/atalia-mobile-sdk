@@ -9,10 +9,13 @@ final class StubURLProtocol: URLProtocol {
     }
 
     nonisolated(unsafe) static var stubs: [String: Stub] = [:]
+    /// Respostas de uma vez só, consumidas na ordem antes de `stubs` (ex.: 401 e depois 200).
+    nonisolated(unsafe) static var queued: [String: [Stub]] = [:]
     nonisolated(unsafe) static var requests: [URLRequest] = []
 
     static func reset() {
         stubs = [:]
+        queued = [:]
         requests = []
     }
 
@@ -36,7 +39,13 @@ final class StubURLProtocol: URLProtocol {
         Self.requests.append(recorded)
 
         let key = "\(request.httpMethod ?? "GET") \(request.url?.path ?? "")"
-        let stub = Self.stubs[key] ?? Stub(status: 404, json: ["error": "sem stub para \(key)"])
+        let stub: Stub
+        if let next = Self.queued[key]?.first {
+            Self.queued[key]?.removeFirst()
+            stub = next
+        } else {
+            stub = Self.stubs[key] ?? Stub(status: 404, json: ["error": "sem stub para \(key)"])
+        }
         let response = HTTPURLResponse(url: request.url!, statusCode: stub.status, httpVersion: nil, headerFields: nil)!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         if let json = stub.json, let data = try? JSONSerialization.data(withJSONObject: json) {

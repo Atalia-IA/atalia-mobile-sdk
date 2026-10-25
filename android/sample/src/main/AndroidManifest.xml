@@ -4,6 +4,8 @@
     <!-- Nota de voz no chat. Sem estas duas, o microfone é negado e o chat avisa o visitante. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <!-- Android 13+: notificações do atendimento. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name=".SampleApplication"
@@ -11,7 +13,8 @@
         android:theme="@android:style/Theme.Material.Light">
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:launchMode="singleTop">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

@@ -20,6 +20,7 @@ public final class AtaliaChatViewController: UIViewController {
     private var lifecycleObservers: [NSObjectProtocol] = []
     private var downloadTask: Task<Void, Never>?
     private var didEmitOpened = false
+    private let pagePin = PagePin()
 
     public init(conversationId: Int? = nil) {
         initialConversationId = conversationId
@@ -123,6 +124,9 @@ public final class AtaliaChatViewController: UIViewController {
         webView.isOpaque = false
         webView.backgroundColor = .clear
         webView.scrollView.contentInsetAdjustmentBehavior = .never
+        webView.scrollView.delegate = pagePin
+        // Sem o elástico da página: puxar o chat para baixo mostrava o fundo atrás dele.
+        webView.scrollView.bounces = false
         webView.allowsBackForwardNavigationGestures = false
         if #available(iOS 16.4, *) {
             webView.isInspectable = config.options.debug
@@ -133,7 +137,9 @@ public final class AtaliaChatViewController: UIViewController {
             webView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             webView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             webView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            webView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
+            // Termina em cima do teclado (sem teclado, na área segura): o chat inteiro cabe acima
+            // dele e o WebKit não precisa rolar a página para mostrar o campo.
+            webView.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor),
         ])
         self.webView = webView
 
@@ -447,6 +453,23 @@ private final class WeakScriptMessageHandler: NSObject, WKScriptMessageHandler {
         MainActor.assumeIsolated {
             target?.receive(message)
         }
+    }
+}
+
+/// Prende a página do chat no topo. O widget é fixo na tela e as mensagens rolam dentro dele, então
+/// a página nunca precisa rolar. Mas, no primeiro foco do campo, o WebKit rolava a WebView para
+/// mostrar o campo e o chat ficava deslocado para cima, com uma faixa vazia até o teclado.
+/// Com zoom, a página volta a rolar normalmente.
+@MainActor
+private final class PagePin: NSObject, UIScrollViewDelegate {
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        // A rolagem do WebKit até o campo é uma animação de desaceleração: não dá para ignorar
+        // `isDecelerating` aqui. O dedo na tela (`isTracking`) só rola a página com zoom.
+        guard scrollView.contentOffset != .zero,
+              !scrollView.isZooming,
+              scrollView.zoomScale <= scrollView.minimumZoomScale + 0.001
+        else { return }
+        scrollView.contentOffset = .zero
     }
 }
 

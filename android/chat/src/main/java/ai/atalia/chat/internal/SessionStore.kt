@@ -39,6 +39,16 @@ internal interface SessionStorage {
     fun loadPrimaryColor(): String? = null
 
     fun savePrimaryColor(color: String) {}
+
+    /**
+     * Token do push do aparelho. Fica separado da sessão: o logout apaga a sessão, mas o aparelho
+     * continua o mesmo e precisa ser registrado de novo na sessão nova.
+     */
+    fun loadPushToken(): String? = null
+
+    fun savePushToken(token: String) {}
+
+    fun clearPushToken() {}
 }
 
 /**
@@ -72,6 +82,18 @@ internal class KeystoreSessionStorage(context: Context, baseUrl: String, channel
 
     override fun savePrimaryColor(color: String) {
         prefs.edit().putString("color:$key", color).apply()
+    }
+
+    // O token do push não abre conversa nenhuma (só serve para o Firebase entregar no aparelho),
+    // então fica fora da cifra da sessão.
+    override fun loadPushToken(): String? = prefs.getString("push:$key", null)
+
+    override fun savePushToken(token: String) {
+        prefs.edit().putString("push:$key", token).apply()
+    }
+
+    override fun clearPushToken() {
+        prefs.edit().remove("push:$key").apply()
     }
 
     private fun secretKey(): SecretKey {
@@ -118,6 +140,17 @@ internal class KeystoreSessionStorage(context: Context, baseUrl: String, channel
 /** Usado nos testes. */
 internal class MemorySessionStorage(private var session: StoredSession? = null) : SessionStorage {
     private var color: String? = null
+    private var pushToken: String? = null
+
+    override fun loadPushToken() = pushToken
+
+    override fun savePushToken(token: String) {
+        pushToken = token
+    }
+
+    override fun clearPushToken() {
+        pushToken = null
+    }
 
     override fun load() = session
 

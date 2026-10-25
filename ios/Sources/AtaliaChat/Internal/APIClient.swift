@@ -44,6 +44,15 @@ final class APIClient {
         try await send("GET", "/unread", sessionToken: sessionToken)
     }
 
+    /// Registra o aparelho na sessão (upsert pelo token). Corpo: `{ token, platform, provider, ... }`.
+    func registerPushDevice(sessionToken: String, device: [String: Any]) async throws -> APIResponse {
+        try await send("POST", "/push/devices", sessionToken: sessionToken, body: device)
+    }
+
+    func unregisterPushDevice(sessionToken: String, pushToken: String) async throws -> APIResponse {
+        try await send("DELETE", "/push/devices", sessionToken: sessionToken, body: ["token": pushToken])
+    }
+
     func endpoint(_ path: String) -> URL {
         var base = baseURL.absoluteString
         while base.hasSuffix("/") { base.removeLast() }

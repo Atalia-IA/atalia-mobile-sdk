@@ -44,9 +44,18 @@ internal class AtaliaCore(
     private val store: SessionStorage,
     private val state: AtaliaStateHolder,
     private val dispatchToMain: (() -> Unit) -> Unit = { it() },
+    /** Dados do aparelho para o registro do push (app, versão, idioma). */
+    private val deviceInfo: () -> JSONObject = { JSONObject().put("platform", "android") },
+    /** Roda trabalho de fundo (re-registro do push depois de troca de sessão vinda do widget). */
+    private val launchInBackground: (suspend () -> Unit) -> Unit = {},
 ) {
     private val sessionMutex = Mutex()
+    private val pushMutex = Mutex()
     private var activeChatRef: WeakReference<ChatBridgeTarget>? = null
+
+    /** Sessão e token já registrados juntos: evita reenviar o registro a cada evento. */
+    @Volatile
+    private var registeredPush: Pair<String, String>? = null
 
     var activeChat: ChatBridgeTarget?
         get() = activeChatRef?.get()
@@ -109,6 +118,7 @@ internal class AtaliaCore(
         state.identified.value = true
         emit(AtaliaEvent.Identified(externalId, contactId))
         runCatching { refreshUnread() }
+        runCatching { registerPushTokenIfNeeded() }
         return AtaliaContact(externalId, contactId, contact.opt("name") as? String)
     }
 
@@ -123,10 +133,51 @@ internal class AtaliaCore(
         // A próxima abertura cria uma sessão anônima nova: o histórico do usuário anterior
         // não aparece para quem usar o aparelho depois.
         store.clear()
+        registeredPush = null
         state.identified.value = false
         setUnread(0)
         emit(AtaliaEvent.LoggedOut)
+        // O logout apagou os aparelhos da sessão no servidor: o aparelho volta como visitante anônimo.
+        runCatching { registerPushTokenIfNeeded() }
     }
+
+    // Push
+
+    suspend fun setPushToken(token: String) {
+        if (token.isBlank()) return
+        store.savePushToken(token.trim())
+        registerPushTokenIfNeeded()
+    }
+
+    /** O app desligou as notificações do usuário: o aparelho sai da Atalia. */
+    suspend fun clearPushToken() {
+        val token = store.loadPushToken() ?: return
+        store.clearPushToken()
+        registeredPush = null
+        store.load()?.token?.let { session -> runCatching { api.unregisterPushDevice(session, token) } }
+    }
+
+    /**
+     * Registra o token do push na sessão atual (cria uma anônima se ainda não houver). Sessão que
+     * o servidor diz ter vencido é trocada por uma nova e o registro é repetido uma vez.
+     */
+    suspend fun registerPushTokenIfNeeded() = pushMutex.withLock {
+        val token = store.loadPushToken() ?: return@withLock
+        var session = ensureSession()
+        if (registeredPush == session to token) return@withLock
+
+        var response = api.registerPushDevice(session, deviceInfo().put("token", token).put("provider", "fcm"))
+        if (response.status == 401) {
+            store.clear()
+            state.identified.value = false
+            session = ensureSession()
+            response = api.registerPushDevice(session, deviceInfo().put("token", token).put("provider", "fcm"))
+        }
+        if (response.isSuccess) registeredPush = session to token
+    }
+
+    /** Com o chat na tela, a mensagem já aparece nele: notificação seria repetida. */
+    fun shouldShowNotification(): Boolean = activeChat == null
 
     // Não lidas
 
@@ -168,6 +219,10 @@ internal class AtaliaCore(
                 val identified = message.bool("identified") ?: false
                 store.save(StoredSession(token, identified, message.string("externalId")))
                 state.identified.value = identified
+                // Sessão nova vinda do widget (identify/logout pelo chat): o aparelho acompanha.
+                if (store.loadPushToken() != null && registeredPush?.first != token) {
+                    launchInBackground { runCatching { registerPushTokenIfNeeded() } }
+                }
             }
             "unread_changed" -> message.long("count")?.let { state.unread.value = it.toInt() }
             "identified" -> state.identified.value = true

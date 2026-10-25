@@ -48,6 +48,10 @@ class AtaliaCoreTest {
             calls += "unread:$sessionToken"
             return unreadResponse
         }
+
+        override suspend fun registerPushDevice(sessionToken: String, device: JSONObject) = ApiResponse(200, JSONObject())
+
+        override suspend fun unregisterPushDevice(sessionToken: String, pushToken: String) = ApiResponse(204, null)
     }
 
     private class FakeChat(private val reply: (String, JSONObject?) -> String?) : ChatBridgeTarget {

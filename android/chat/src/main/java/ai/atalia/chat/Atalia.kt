@@ -1,9 +1,11 @@
 package ai.atalia.chat
 
 import ai.atalia.chat.internal.AtaliaCore
+import ai.atalia.chat.internal.AtaliaNotifications
 import ai.atalia.chat.internal.AtaliaStateHolder
 import ai.atalia.chat.internal.HttpApiClient
 import ai.atalia.chat.internal.KeystoreSessionStorage
+import ai.atalia.chat.internal.PushPayload
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
@@ -20,6 +22,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import org.json.JSONObject
+import java.util.Locale
 
 /**
  * Ponto de entrada do SDK do chat da Atalia.
@@ -39,6 +43,9 @@ object Atalia {
     @Volatile
     private var core: AtaliaCore? = null
     private var lifecycleObserved = false
+
+    @Volatile
+    private var pendingPushToken: String? = null
 
     /** Mensagens do atendente, da IA ou do sistema ainda não lidas pelo visitante. */
     @JvmStatic
@@ -66,9 +73,19 @@ object Atalia {
             store = KeystoreSessionStorage(appContext, options.baseUrl, channelToken),
             state = state,
             dispatchToMain = ::runOnMain,
+            deviceInfo = { deviceInfo(appContext) },
+            launchInBackground = { block -> scope.launch { block() } },
         )
         core = created
-        scope.launch { created.loadBranding() }
+        AtaliaNotifications.ensureChannel(appContext)
+        scope.launch {
+            created.loadBranding()
+            pendingPushToken?.let { token ->
+                pendingPushToken = null
+                runCatching { created.setPushToken(token) }
+            }
+            runCatching { created.registerPushTokenIfNeeded() }
+        }
         runOnMain {
             // O observador do processo dispara onStart na hora em que é registrado (app já aberto)
             // ou quando o app abrir: é ele que busca as não lidas. Num segundo configure (outro
@@ -112,6 +129,72 @@ object Atalia {
 
     @JvmStatic
     fun refreshUnread(callback: AtaliaCallback<Int>) = launchWithCallback(callback) { refreshUnread() }
+
+    // Push
+
+    /**
+     * Token do Firebase Cloud Messaging do aparelho. Chame no `onNewToken` do seu
+     * `FirebaseMessagingService` e ao abrir o app (`FirebaseMessaging.getInstance().token`).
+     * O SDK registra o aparelho na Atalia e o mantém registrado quando o usuário entra ou sai.
+     */
+    @JvmStatic
+    fun setPushToken(token: String) {
+        val current = core
+        if (current == null) {
+            // onNewToken pode chegar antes do configure: aplica quando ele vier.
+            pendingPushToken = token
+            return
+        }
+        scope.launch { runCatching { current.setPushToken(token) } }
+    }
+
+    /** Tira o aparelho da Atalia (o usuário desligou as notificações do atendimento no app). */
+    @JvmStatic
+    fun clearPushToken() {
+        pendingPushToken = null
+        val current = core ?: return
+        scope.launch { runCatching { current.clearPushToken() } }
+    }
+
+    /** A notificação veio da Atalia? Use no `onMessageReceived` antes de tratar as suas. */
+    @JvmStatic
+    fun isAtaliaNotification(data: Map<String, String>?): Boolean = PushPayload.parse(data) != null
+
+    /**
+     * Chame no `onMessageReceived` (app aberto: o Firebase não mostra nada sozinho). Atualiza as não
+     * lidas e mostra a notificação, a não ser que o chat já esteja na tela.
+     * @return false quando a notificação não é da Atalia (trate como as suas).
+     */
+    @JvmStatic
+    fun handleNotification(context: Context, data: Map<String, String>?, title: String?, body: String?): Boolean {
+        val payload = PushPayload.parse(data) ?: return false
+        val current = core
+        current?.let { scope.launch { runCatching { it.refreshUnread() } } }
+        if (current?.shouldShowNotification() == false) return true
+        val icon = current?.options?.notificationIcon ?: context.applicationInfo.icon
+        AtaliaNotifications.show(context.applicationContext, payload, title, body, icon)
+        return true
+    }
+
+    /**
+     * Toque na notificação mostrada pelo sistema (app em segundo plano): o Firebase abre a activity
+     * de entrada do app com os dados da notificação nos extras. Chame no `onCreate` e no
+     * `onNewIntent` dessa activity.
+     * @return true quando era da Atalia e o chat foi aberto.
+     */
+    @JvmStatic
+    fun handleNotificationTap(activity: Activity, intent: Intent?): Boolean {
+        if (intent == null) return false
+        val extras = intent.extras ?: return false
+        @Suppress("DEPRECATION")
+        val data = extras.keySet().associateWith { key -> extras.get(key)?.toString() }
+        val payload = PushPayload.parse(data) ?: return false
+        if (core == null) return false
+        // Não reabrir o chat quando a activity for recriada (rotação, volta do fundo).
+        intent.removeExtra("atalia")
+        if (payload.conversationId != null) openConversation(activity, payload.conversationId) else open(activity)
+        return true
+    }
 
     @JvmStatic
     fun addListener(listener: AtaliaListener) {
@@ -165,5 +248,18 @@ object Atalia {
 
     private fun runOnMain(block: () -> Unit) {
         if (Looper.myLooper() == Looper.getMainLooper()) block() else mainHandler.post(block)
+    }
+
+    private fun deviceInfo(context: Context): JSONObject {
+        val appVersion = runCatching {
+            @Suppress("DEPRECATION")
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName
+        }.getOrNull()
+        return JSONObject()
+            .put("platform", "android")
+            .put("app_id", context.packageName)
+            .put("sdk_version", SDK_VERSION)
+            .put("locale", Locale.getDefault().toLanguageTag())
+            .apply { appVersion?.let { put("app_version", it) } }
     }
 }

@@ -1,6 +1,7 @@
 import Foundation
 #if canImport(UIKit)
 import UIKit
+import UserNotifications
 #endif
 
 /// Ponto de entrada do SDK do chat da Atalia.
@@ -53,7 +54,79 @@ public enum Atalia {
         AtaliaCore.shared.removeListener(token)
     }
 
+    // MARK: Push
+
+    /// Token do Firebase Cloud Messaging (a Atalia envia pelo Firebase do app). Chame no
+    /// `messaging(_:didReceiveRegistrationToken:)` do `MessagingDelegate`. O SDK registra o
+    /// aparelho na Atalia e o mantém registrado quando o usuário entra ou sai.
+    public static func setPushToken(_ token: String) {
+        Task { await AtaliaCore.shared.setPushToken(StoredPushToken(token: token, provider: "fcm", environment: nil)) }
+    }
+
+    /// Token do APNs, para quem entrega pelo próprio backend (webhook). Chame no
+    /// `application(_:didRegisterForRemoteNotificationsWithDeviceToken:)`. Com o Firebase, use
+    /// `setPushToken(_:)` com o token do Firebase.
+    public static func setAPNsToken(_ deviceToken: Data, environment: AtaliaPushEnvironment) {
+        let hex = deviceToken.map { String(format: "%02x", $0) }.joined()
+        Task { await AtaliaCore.shared.setPushToken(StoredPushToken(token: hex, provider: "apns", environment: environment.rawValue)) }
+    }
+
+    /// Tira o aparelho da Atalia (o usuário desligou as notificações do atendimento no app).
+    public static func clearPushToken() {
+        Task { await AtaliaCore.shared.clearPushToken() }
+    }
+
+    /// A notificação veio da Atalia? Use antes de tratar as suas.
+    public nonisolated static func isAtaliaNotification(_ userInfo: [AnyHashable: Any]) -> Bool {
+        PushPayload(userInfo) != nil
+    }
+
     #if canImport(UIKit)
+    /// Para o `userNotificationCenter(_:willPresent:withCompletionHandler:)`, com o app aberto.
+    /// Atualiza as não lidas e devolve `[]` quando o chat já está na tela (a mensagem aparece
+    /// nele); senão banner, lista, som e badge.
+    /// - Returns: nil quando a notificação não é da Atalia (trate como as suas).
+    public static func presentationOptions(for notification: UNNotification) -> UNNotificationPresentationOptions? {
+        guard PushPayload(notification.request.content.userInfo) != nil else { return nil }
+        let core = AtaliaCore.shared
+        if core.configuration != nil {
+            Task { _ = try? await core.refreshUnread() }
+        }
+        return core.shouldShowNotification() ? [.banner, .list, .sound, .badge] : []
+    }
+
+    /// Toque na notificação (`userNotificationCenter(_:didReceive:withCompletionHandler:)`): abre
+    /// o chat na conversa dela, inclusive quando o toque é que abriu o app.
+    /// - Returns: false quando a notificação não é da Atalia.
+    @discardableResult
+    public static func handleNotificationTap(_ userInfo: [AnyHashable: Any]) -> Bool {
+        guard let payload = PushPayload(userInfo), AtaliaCore.shared.configuration != nil else { return false }
+        presentWhenActive(conversationId: payload.conversationId)
+        return true
+    }
+
+    private static var pendingTap: (observer: NSObjectProtocol, conversationId: Int?)?
+
+    /// Com o app aberto pelo toque, a resposta chega antes de haver janela ativa: espera o app ativar.
+    private static func presentWhenActive(conversationId: Int?) {
+        if UIApplication.shared.applicationState == .active, topViewController() != nil {
+            present(conversationId: conversationId)
+            return
+        }
+        if let pendingTap { NotificationCenter.default.removeObserver(pendingTap.observer) }
+        let observer = NotificationCenter.default.addObserver(
+            forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main
+        ) { _ in
+            Task { @MainActor in
+                guard let pending = Atalia.pendingTap else { return }
+                NotificationCenter.default.removeObserver(pending.observer)
+                Atalia.pendingTap = nil
+                present(conversationId: pending.conversationId)
+            }
+        }
+        pendingTap = (observer, conversationId)
+    }
+
     /// Decide como abrir links que o visitante toca no chat. Devolva `true` se o app tratou;
     /// `false` (ou nil) abre pelo sistema (Safari, discador, WhatsApp).
     public static var urlHandler: ((URL) -> Bool)?

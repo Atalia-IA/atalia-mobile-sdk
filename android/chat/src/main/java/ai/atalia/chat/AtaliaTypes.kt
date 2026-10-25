@@ -12,6 +12,8 @@ import android.net.Uri
  * @property debug Permite inspecionar o WebView pelo `chrome://inspect`. Nunca em produção.
  * @property urlHandler Decide como abrir links tocados no chat. Devolva `true` se o app tratou;
  *   `false` abre pelo sistema (navegador, discador, WhatsApp).
+ * @property notificationIcon Ícone pequeno (monocromático) das notificações do chat. Sem ele, o
+ *   ícone do app, que em muitos aparelhos aparece como um quadrado branco.
  */
 data class AtaliaOptions @JvmOverloads constructor(
     val baseUrl: String = DEFAULT_BASE_URL,
@@ -19,6 +21,7 @@ data class AtaliaOptions @JvmOverloads constructor(
     val closeButton: Boolean = true,
     val debug: Boolean = false,
     val urlHandler: ((Context, Uri) -> Boolean)? = null,
+    @androidx.annotation.DrawableRes val notificationIcon: Int? = null,
 ) {
     companion object {
         const val DEFAULT_BASE_URL = "https://chat.atalia.ai"

@@ -11,3 +11,4 @@ Primeira versão, Android e iOS.
 - Contador de não lidas (`unreadCount`) e eventos (`ready`, `messageReceived`, `unreadChanged`...).
 - Sessão guardada no Keychain (iOS) e cifrada pelo Android Keystore.
 - Links abrem fora do app; downloads com o nome certo; o chat avisa a Atalia quando o app vai para segundo plano.
+- Notificações push: `setPushToken` (Firebase) e `setAPNsToken` (iOS, modo webhook) registram o aparelho na Atalia e o acompanham no `identify` e no `logout`. `handleNotification` (Android) e `presentationOptions(for:)` (iOS) não notificam com o chat na tela, e `handleNotificationTap` abre o chat na conversa.

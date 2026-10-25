@@ -30,19 +30,40 @@ final class AtaliaCore {
     private var listeners: [AtaliaListenerToken: (AtaliaEvent) -> Void] = [:]
     private var waiters: [EventWaiter] = []
     private var sessionTask: Task<String, Error>?
+    /// Dados do aparelho no registro do push (app, versão, idioma). Os testes trocam.
+    private var deviceInfo: () -> [String: Any] = AtaliaCore.defaultDeviceInfo
+    /// Token do push recebido antes do `configure`: aplicado quando ele vier.
+    private var pendingPushToken: StoredPushToken?
+    /// Sessão e token já registrados nesta execução: evita repetir o POST.
+    private var registeredPush: (session: String, token: String)?
+    /// Último registro do push na fila. Um de cada vez, na ordem pedida.
+    private(set) var pushTask: Task<Void, Never>?
     #if canImport(UIKit)
     private var foregroundObserver: NSObjectProtocol?
     #endif
 
-    func configure(channelToken: String, options: AtaliaOptions, api: APIClient? = nil, store: SessionStoring? = nil) {
+    func configure(
+        channelToken: String,
+        options: AtaliaOptions,
+        api: APIClient? = nil,
+        store: SessionStoring? = nil,
+        deviceInfo: (() -> [String: Any])? = nil
+    ) {
         let api = api ?? APIClient(baseURL: options.baseURL, channelToken: channelToken)
         let store = store ?? KeychainSessionStore(baseURL: options.baseURL, channelToken: channelToken)
         configuration = Configuration(channelToken: channelToken, options: options, api: api, store: store)
+        if let deviceInfo { self.deviceInfo = deviceInfo }
+        registeredPush = nil
+        if let pending = pendingPushToken {
+            store.savePushToken(pending)
+            pendingPushToken = nil
+        }
         state.isIdentified = store.load()?.identified ?? false
         observeForeground()
         Task { [weak self] in
             await self?.loadChannelBranding()
             _ = try? await self?.refreshUnread()
+            await self?.registerPushTokenIfNeeded()
         }
     }
 
@@ -117,6 +138,7 @@ final class AtaliaCore {
         state.isIdentified = true
         emit(.identified(externalId: externalId, contactId: contactId))
         _ = try? await refreshUnread()
+        await registerPushTokenIfNeeded()
         return AtaliaContact(externalId: externalId, contactId: contactId, name: contact["name"] as? String)
     }
 
@@ -136,9 +158,95 @@ final class AtaliaCore {
         // A próxima abertura cria uma sessão anônima nova: o histórico do usuário anterior
         // não aparece para quem usar o aparelho depois.
         config.store.clear()
+        registeredPush = nil
         state.isIdentified = false
         setUnread(0)
         emit(.loggedOut)
+        // O logout apagou os aparelhos da sessão no servidor: o aparelho volta como visitante anônimo.
+        await registerPushTokenIfNeeded()
+    }
+
+    // MARK: Push
+
+    func setPushToken(_ push: StoredPushToken) async {
+        var push = push
+        push.token = push.token.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !push.token.isEmpty else { return }
+        guard let config = configuration else {
+            pendingPushToken = push
+            return
+        }
+        config.store.savePushToken(push)
+        await registerPushTokenIfNeeded()
+    }
+
+    /// O app desligou as notificações do atendimento: o aparelho sai da Atalia.
+    func clearPushToken() async {
+        pendingPushToken = nil
+        guard let config = configuration, let push = config.store.loadPushToken() else { return }
+        config.store.clearPushToken()
+        registeredPush = nil
+        if let session = config.store.load()?.token {
+            _ = try? await config.api.unregisterPushDevice(sessionToken: session, pushToken: push.token)
+        }
+    }
+
+    /// Registra o token do push na sessão atual (cria uma anônima se ainda não houver).
+    func registerPushTokenIfNeeded() async {
+        await schedulePushRegistration().value
+    }
+
+    /// Enfileira um registro atrás do anterior: identify e session_changed seguidos não mandam
+    /// dois POST com a mesma sessão.
+    @discardableResult
+    func schedulePushRegistration() -> Task<Void, Never> {
+        let previous = pushTask
+        let task = Task { [weak self] in
+            await previous?.value
+            await self?.performPushRegistration()
+        }
+        pushTask = task
+        return task
+    }
+
+    private func performPushRegistration() async {
+        guard let config = configuration,
+              let push = config.store.loadPushToken(),
+              var session = try? await ensureSession()
+        else { return }
+        if let registeredPush, registeredPush.session == session, registeredPush.token == push.token { return }
+
+        var response = try? await config.api.registerPushDevice(sessionToken: session, device: pushDeviceBody(push))
+        if response?.status == 401 {
+            // Sessão identificada que venceu: troca por uma anônima e repete uma vez.
+            config.store.clear()
+            state.isIdentified = false
+            guard let fresh = try? await ensureSession() else { return }
+            session = fresh
+            response = try? await config.api.registerPushDevice(sessionToken: session, device: pushDeviceBody(push))
+        }
+        if response?.isSuccess == true { registeredPush = (session, push.token) }
+    }
+
+    private func pushDeviceBody(_ push: StoredPushToken) -> [String: Any] {
+        var body = deviceInfo()
+        body["token"] = push.token
+        body["provider"] = push.provider
+        if let environment = push.environment { body["environment"] = environment }
+        return body
+    }
+
+    nonisolated static func defaultDeviceInfo() -> [String: Any] {
+        var info: [String: Any] = ["platform": "ios", "sdk_version": Atalia.sdkVersion]
+        if let bundleId = Bundle.main.bundleIdentifier { info["app_id"] = bundleId }
+        if let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String { info["app_version"] = version }
+        if let language = Locale.preferredLanguages.first { info["locale"] = String(language.prefix(16)) }
+        return info
+    }
+
+    /// Com o chat na tela, a mensagem já aparece nele: notificação seria repetida.
+    func shouldShowNotification() -> Bool {
+        activeChat == nil
     }
 
     // MARK: Não lidas
@@ -173,6 +281,10 @@ final class AtaliaCore {
                 let identified = message.bool("identified") ?? false
                 configuration?.store.save(StoredSession(token: token, identified: identified, externalId: message.string("externalId")))
                 state.isIdentified = identified
+                // Sessão nova vinda do widget (identify/logout pelo chat): o aparelho acompanha.
+                if configuration?.store.loadPushToken() != nil, registeredPush?.session != token {
+                    schedulePushRegistration()
+                }
             }
         case "unread_changed":
             if let count = message.int("count") { state.unreadCount = count }

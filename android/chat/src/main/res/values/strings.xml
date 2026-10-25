@@ -5,4 +5,6 @@
     <string name="atalia_chat_close">Fechar</string>
     <string name="atalia_chat_download_started">Baixando o arquivo…</string>
     <string name="atalia_chat_no_app_for_link">Nenhum app para abrir este link</string>
+    <string name="atalia_chat_notification_channel">Mensagens do atendimento</string>
+    <string name="atalia_chat_notification_fallback_title">Nova mensagem</string>
 </resources>

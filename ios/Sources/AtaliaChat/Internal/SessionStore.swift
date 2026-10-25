@@ -8,10 +8,22 @@ struct StoredSession: Codable, Equatable {
     var externalId: String?
 }
 
+/// Token do push do aparelho e por onde ele é entregue: `fcm` (a Atalia envia pelo Firebase) ou
+/// `apns` (o backend do app envia, modo webhook). `environment` só vale para o APNs.
+struct StoredPushToken: Codable, Equatable {
+    var token: String
+    var provider: String
+    var environment: String?
+}
+
 protocol SessionStoring: AnyObject {
     func load() -> StoredSession?
     func save(_ session: StoredSession)
     func clear()
+    /// O token do push sobrevive ao logout (`clear`): o aparelho continua o mesmo.
+    func loadPushToken() -> StoredPushToken?
+    func savePushToken(_ token: StoredPushToken)
+    func clearPushToken()
 }
 
 /// Um item por canal e origem: o mesmo app pode falar com mais de um canal (ou com homologação).
@@ -23,7 +35,15 @@ final class KeychainSessionStore: SessionStoring {
         account = "\(baseURL.host ?? "atalia")|\(channelToken)"
     }
 
-    private var query: [String: Any] {
+    func load() -> StoredSession? { read(account) }
+    func save(_ session: StoredSession) { write(session, to: account) }
+    func clear() { delete(account) }
+
+    func loadPushToken() -> StoredPushToken? { read("\(account)|push") }
+    func savePushToken(_ token: StoredPushToken) { write(token, to: "\(account)|push") }
+    func clearPushToken() { delete("\(account)|push") }
+
+    private func query(_ account: String) -> [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -31,38 +51,39 @@ final class KeychainSessionStore: SessionStoring {
         ]
     }
 
-    func load() -> StoredSession? {
-        var request = query
+    private func read<Value: Decodable>(_ account: String) -> Value? {
+        var request = query(account)
         request[kSecReturnData as String] = true
         request[kSecMatchLimit as String] = kSecMatchLimitOne
         var result: AnyObject?
         guard SecItemCopyMatching(request as CFDictionary, &result) == errSecSuccess, let data = result as? Data else { return nil }
-        return try? JSONDecoder().decode(StoredSession.self, from: data)
+        return try? JSONDecoder().decode(Value.self, from: data)
     }
 
-    func save(_ session: StoredSession) {
-        guard let data = try? JSONEncoder().encode(session) else { return }
+    private func write<Value: Encodable>(_ value: Value, to account: String) {
+        guard let data = try? JSONEncoder().encode(value) else { return }
         let attributes: [String: Any] = [
             kSecValueData as String: data,
             // Só neste aparelho e depois do primeiro desbloqueio: o push pode acordar o app
             // com a tela bloqueada e o SDK precisa ler a sessão para atualizar o badge.
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
         ]
-        if SecItemUpdate(query as CFDictionary, attributes as CFDictionary) == errSecItemNotFound {
-            var insert = query
+        if SecItemUpdate(query(account) as CFDictionary, attributes as CFDictionary) == errSecItemNotFound {
+            var insert = query(account)
             insert.merge(attributes) { _, new in new }
             SecItemAdd(insert as CFDictionary, nil)
         }
     }
 
-    func clear() {
-        SecItemDelete(query as CFDictionary)
+    private func delete(_ account: String) {
+        SecItemDelete(query(account) as CFDictionary)
     }
 }
 
 /// Usado nos testes.
 final class MemorySessionStore: SessionStoring {
     private var session: StoredSession?
+    private var pushToken: StoredPushToken?
 
     init(_ session: StoredSession? = nil) {
         self.session = session
@@ -71,4 +92,8 @@ final class MemorySessionStore: SessionStoring {
     func load() -> StoredSession? { session }
     func save(_ session: StoredSession) { self.session = session }
     func clear() { session = nil }
+
+    func loadPushToken() -> StoredPushToken? { pushToken }
+    func savePushToken(_ token: StoredPushToken) { pushToken = token }
+    func clearPushToken() { pushToken = nil }
 }

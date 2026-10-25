@@ -35,3 +35,10 @@ public struct AtaliaOptions {
         self.debug = debug
     }
 }
+
+/// Ambiente do token do APNs em `Atalia.setAPNsToken(_:environment:)`: `sandbox` nos builds
+/// instalados pelo Xcode, `production` no TestFlight e na App Store.
+public enum AtaliaPushEnvironment: String, Sendable {
+    case production
+    case sandbox
+}
