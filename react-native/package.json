@@ -1,6 +1,6 @@
 {
   "name": "@atalia/react-native-chat",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Chat de atendimento da Atalia em apps React Native e Expo: chat, identificação do usuário, não lidas, push e botão flutuante.",
   "main": "build/index.js",
   "types": "build/index.d.ts",

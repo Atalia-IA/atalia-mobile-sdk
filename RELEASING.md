@@ -23,7 +23,7 @@ Os três arquivos acima, mais o `react-native/package-lock.json` (rode `npm inst
 ## 2. Criar o release no GitHub
 
 1. Abra **Releases › Draft a new release**.
-2. Em **Choose a tag**, digite a versão (`0.2.0`, sem "v") e crie a tag.
+2. Em **Choose a tag**, digite a versão (`0.3.0`, sem "v") e crie a tag.
 3. Título igual à versão; cole as notas do CHANGELOG.
 4. **Publish release.**
 
@@ -57,6 +57,8 @@ Só depois que o Maven Central mostrar a versão (passo 4): o pacote React Nativ
 2. O workflow confere que a versão já está no Maven Central, roda os testes e publica `@atalia/react-native-chat` com procedência (provenance).
 
 No npm também nada se apaga depois de 72 horas: versão errada se corrige com a próxima.
+
+**Primeira publicação do pacote (0.3.0):** pode ser pelo seu computador, com o seu login do npm (que já tem 2FA), sem token: `npm login` e depois `cd react-native && npm publish --access public`. O `prepare` copia o SDK iOS e compila antes de publicar.
 
 ## Secrets do repositório (uma vez só)
 

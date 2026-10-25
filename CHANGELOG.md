@@ -2,7 +2,9 @@
 
 Versões seguem [SemVer](https://semver.org/lang/pt-BR/). O protocolo do bridge tem versão própria (ver [protocol/README.md](protocol/README.md)).
 
-## Não lançada
+## 0.3.0 (2026-10-25)
+
+React Native e Expo.
 
 - React Native e Expo: pacote `@atalia/react-native-chat`, feito com Expo Modules sobre os dois SDKs nativos. Plugin do Expo (token do canal e permissões, com o SDK configurado antes do JavaScript), chat, identificação, não lidas e estado (`useAtaliaState`), eventos, push com `@react-native-firebase/messaging` ou `expo-notifications` e botão flutuante.
 
