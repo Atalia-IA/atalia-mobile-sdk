@@ -12,6 +12,8 @@ internal data class ChannelBranding(
     val launcherText: String? = null,
     /** `bottom-left` ou `bottom-right`. */
     val launcherPosition: String? = null,
+    /** Nome do atendimento (o mesmo do cabeçalho do chat): subtítulo do botão flutuante. */
+    val botName: String? = null,
 ) {
     /** Cor do botão: a dele, senão a do canal (mesma regra do site). */
     val buttonColor: String? get() = launcherColor ?: primaryColor
@@ -23,17 +25,22 @@ internal data class ChannelBranding(
         .put("launcher_color", launcherColor)
         .put("launcher_text", launcherText)
         .put("launcher_position", launcherPosition)
+        .put("bot_name", botName)
         .toString()
 
     companion object {
-        /** `branding` de `GET /api/webchat/:token` (ou o que foi salvo por [toJson]). */
-        fun fromJson(json: JSONObject): ChannelBranding {
+        /**
+         * `branding` de `GET /api/webchat/:token` (ou o que foi salvo por [toJson]). Sem `bot_name`, o
+         * nome do atendimento é o do canal ([channelName]), a mesma regra do cabeçalho do chat.
+         */
+        fun fromJson(json: JSONObject, channelName: String? = null): ChannelBranding {
             fun text(key: String) = (json.opt(key) as? String)?.takeIf { it.isNotBlank() }
             return ChannelBranding(
                 primaryColor = text("primary_color"),
                 launcherColor = text("launcher_color"),
                 launcherText = text("launcher_text"),
                 launcherPosition = text("launcher_position"),
+                botName = text("bot_name") ?: channelName?.takeIf { it.isNotBlank() },
             )
         }
     }

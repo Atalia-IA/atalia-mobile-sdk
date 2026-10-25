@@ -7,6 +7,8 @@ on:
     paths: ['react-native/**', 'ios/**', 'android/**', 'protocol/**', '.github/workflows/react-native.yml']
   pull_request:
     paths: ['react-native/**', 'ios/**', 'android/**', 'protocol/**', '.github/workflows/react-native.yml']
+  # Também à mão: Actions › React Native › Run workflow.
+  workflow_dispatch:
 
 jobs:
   package:
@@ -59,6 +61,14 @@ jobs:
 
   ios-example:
     runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        # dynamic: o que o @react-native-firebase 27 exige no iOS (apps com push pelo Firebase).
+        frameworks: ['', dynamic]
+    name: ios-example${{ matrix.frameworks && format(' ({0} frameworks)', matrix.frameworks) || '' }}
+    env:
+      ATALIA_IOS_FRAMEWORKS: ${{ matrix.frameworks }}
     steps:
       - uses: actions/checkout@v4
       - name: Xcode mais novo da máquina (o React Native novo pede Xcode recente)

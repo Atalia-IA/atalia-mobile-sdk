@@ -11,6 +11,9 @@ struct SdkFragment: Equatable {
     var identity: String?
     var conversationId: Int?
     var closeButton = true
+    /// Chat pré-carregado pelo botão flutuante: a página nasce em segundo plano (sem conexão, sem
+    /// presença, sem marcar lidas) até o `app_state` de primeiro plano.
+    var background = false
 
     var jsonObject: [String: Any] {
         var json: [String: Any] = [
@@ -23,6 +26,7 @@ struct SdkFragment: Equatable {
         if let session { json["session"] = session }
         if let identity { json["identity"] = identity }
         if let conversationId { json["conversationId"] = conversationId }
+        if background { json["background"] = true }
         return json
     }
 

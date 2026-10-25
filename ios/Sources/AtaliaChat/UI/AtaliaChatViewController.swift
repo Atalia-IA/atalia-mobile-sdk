@@ -13,6 +13,7 @@ public final class AtaliaChatViewController: UIViewController {
 
     private let initialConversationId: Int?
     private var webView: WKWebView?
+    private var webViewTop: NSLayoutConstraint?
     private let spinner = UIActivityIndicatorView(style: .large)
     private var errorView: UIView?
     private var isReady = false
@@ -22,8 +23,33 @@ public final class AtaliaChatViewController: UIViewController {
     private var didEmitOpened = false
     private let pagePin = PagePin()
 
-    public init(conversationId: Int? = nil) {
+    /// Carregado escondido pelo botão flutuante (`ChatPrewarm`): a página nasce em segundo plano.
+    private let preloaded: Bool
+    /// Aberto pelo SDK (`Atalia.present`): ao fechar, pode voltar a esperar escondido.
+    var recyclable = false
+    /// Na tela, entre o `viewDidAppear` e a saída de vez.
+    private var isShown = false
+    /// Estado em que a página nasceu e o último pedido feito antes de ela ficar pronta.
+    private var bornState = "foreground"
+    private var pendingAppState: String?
+    /// Canal, origem, opções e sessão com que a página carregou: só reaproveita se nada mudou.
+    private var loadedFor: LoadKey?
+
+    private struct LoadKey: Equatable {
+        var channelToken: String
+        var baseURL: URL
+        var customDomain: Bool
+        var closeButton: Bool
+        var session: String?
+    }
+
+    public convenience init(conversationId: Int? = nil) {
+        self.init(conversationId: conversationId, preloaded: false)
+    }
+
+    init(conversationId: Int?, preloaded: Bool) {
         initialConversationId = conversationId
+        self.preloaded = preloaded
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -61,8 +87,15 @@ public final class AtaliaChatViewController: UIViewController {
         loadChat(conversationId: initialConversationId)
     }
 
+    public override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        // Na folha, a alça do sistema fica numa faixa na cor do canal, acima do chat.
+        webViewTop?.constant = presentationController is UISheetPresentationController ? 14 : 0
+    }
+
     public override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        isShown = true
         AtaliaCore.shared.activeChat = self
         if !didEmitOpened {
             didEmitOpened = true
@@ -75,11 +108,48 @@ public final class AtaliaChatViewController: UIViewController {
         // Câmera e seletor de arquivos também cobrem esta tela; só conta como fechado quando
         // ela (ou quem a contém) está saindo de vez.
         guard isLeavingForGood else { return }
+        isShown = false
         if AtaliaCore.shared.activeChat === self {
             AtaliaCore.shared.activeChat = nil
         }
-        tearDown()
         AtaliaCore.shared.emit(.closed)
+        // Com o botão flutuante na tela, o chat volta a esperar escondido: a próxima abertura é imediata.
+        if recyclable, ChatPrewarm.recycle(self) { return }
+        tearDown()
+    }
+
+    /// O chat pré-carregado vai aparecer: a página sai do segundo plano (conecta e marca as lidas).
+    func activate(conversationId: Int?) {
+        if let conversationId { openConversation(conversationId) }
+        setPageState("foreground")
+    }
+
+    /// Voltou a esperar escondido: sem conexão e sem marcar lidas, e a Atalia segue mandando push.
+    func deactivate() {
+        didEmitOpened = false
+        setPageState("background")
+    }
+
+    /// Ainda serve para abrir: carregou sem erro, com o mesmo canal, as mesmas opções e a mesma sessão.
+    var isReusable: Bool {
+        webView != nil && errorView == nil && loadedFor != nil && loadedFor == currentLoadKey()
+    }
+
+    func discard() {
+        tearDown()
+        webView?.removeFromSuperview()
+        webView = nil
+    }
+
+    private func currentLoadKey() -> LoadKey? {
+        guard let config = AtaliaCore.shared.configuration else { return nil }
+        return LoadKey(
+            channelToken: config.channelToken,
+            baseURL: config.options.baseURL,
+            customDomain: config.options.customDomain,
+            closeButton: config.options.closeButton,
+            session: AtaliaCore.shared.storedSessionToken
+        )
     }
 
     private var isLeavingForGood: Bool {
@@ -133,21 +203,29 @@ public final class AtaliaChatViewController: UIViewController {
         }
         webView.translatesAutoresizingMaskIntoConstraints = false
         view.insertSubview(webView, belowSubview: spinner)
+        let top = webView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: webViewTop?.constant ?? 0)
         NSLayoutConstraint.activate([
             webView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             webView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            webView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            top,
             // Termina em cima do teclado (sem teclado, na área segura): o chat inteiro cabe acima
             // dele e o WebKit não precisa rolar a página para mostrar o campo.
             webView.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor),
         ])
         self.webView = webView
+        webViewTop = top
 
+        // Pré-carregado e ainda escondido: a página nasce em segundo plano até ser mostrada.
+        let background = preloaded && !isShown
+        bornState = background ? "background" : "foreground"
+        pendingAppState = nil
         var fragment = SdkFragment()
         fragment.appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
         fragment.session = AtaliaCore.shared.storedSessionToken
         fragment.conversationId = conversationId
         fragment.closeButton = config.options.closeButton
+        fragment.background = background
+        loadedFor = currentLoadKey()
         let url = ChatURLBuilder.url(
             baseURL: config.options.baseURL,
             channelToken: config.channelToken,
@@ -182,6 +260,9 @@ public final class AtaliaChatViewController: UIViewController {
             isReady = true
             spinner.stopAnimating()
             flushPendingCommands()
+        case "session_changed":
+            // A página trocou de sessão (identify, logout): o reaproveitamento acompanha.
+            loadedFor?.session = bridge.string("sessionToken")
         case "error":
             if bridge.string("command") == nil { spinner.stopAnimating() }
         case "close":
@@ -200,6 +281,11 @@ public final class AtaliaChatViewController: UIViewController {
         let commands = pendingCommands
         pendingCommands.removeAll()
         commands.forEach { sendCommand($0.type, payload: $0.payload) }
+        // Pedido de estado antes de a página ficar pronta: só vale se for diferente do que ela nasceu.
+        if let state = pendingAppState {
+            pendingAppState = nil
+            if state != bornState { setPageState(state) }
+        }
     }
 
     private func isTrusted(_ origin: WKSecurityOrigin) -> Bool {
@@ -226,9 +312,18 @@ public final class AtaliaChatViewController: UIViewController {
 
     /// Em segundo plano o widget fecha o WebSocket e avisa a Atalia que o visitante saiu. Sem
     /// isso o iOS congela o WebView com o socket "aberto" e o push da próxima mensagem não sai.
-    /// A tarefa de segundo plano dá tempo de o aviso sair antes da suspensão.
+    /// O chat pré-carregado e escondido já está em segundo plano e fica assim.
     private func notifyAppState(_ state: String) {
-        guard isReady, let webView else { return }
+        guard isShown || !preloaded else { return }
+        setPageState(state)
+    }
+
+    /// `app_state` para a página. A tarefa de segundo plano dá tempo de o aviso sair antes da suspensão.
+    private func setPageState(_ state: String) {
+        guard isReady, let webView else {
+            pendingAppState = state
+            return
+        }
         let backgroundTask = AppStateBackgroundTask()
         if state == "background" { backgroundTask.begin() }
         webView.evaluateJavaScript(Self.commandScript("app_state", payload: ["state": state])) { _, _ in
@@ -341,9 +436,12 @@ extension AtaliaChatViewController: ChatBridgeTarget {
     }
 
     func sendCommand(_ type: String, payload: [String: Any]?) {
+        if type == "app_state", let state = payload?["state"] as? String {
+            setPageState(state)
+            return
+        }
         guard isReady, let webView else {
-            // Estado do app antes de o chat carregar não vale nada: ele já nasce em primeiro plano.
-            if type != "app_state" { pendingCommands.append((type, payload)) }
+            pendingCommands.append((type, payload))
             return
         }
         webView.evaluateJavaScript(Self.commandScript(type, payload: payload), completionHandler: nil)

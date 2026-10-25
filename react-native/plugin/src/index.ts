@@ -1,4 +1,13 @@
-import { AndroidConfig, type ConfigPlugin, createRunOncePlugin, withAndroidManifest, withInfoPlist } from 'expo/config-plugins';
+import fs from 'node:fs';
+import path from 'node:path';
+import {
+  AndroidConfig,
+  type ConfigPlugin,
+  createRunOncePlugin,
+  withAndroidManifest,
+  withDangerousMod,
+  withInfoPlist,
+} from 'expo/config-plugins';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const pkg: { name: string; version: string } = require('../../package.json');
@@ -20,6 +29,13 @@ export type AtaliaPluginProps = {
   microphonePermission?: string | false;
   /** Android 13+: declara POST_NOTIFICATIONS. Padrão: `true`. */
   notifications?: boolean;
+  /**
+   * Android: ícone pequeno das notificações, um PNG branco com fundo transparente (96×96), com o
+   * caminho a partir da raiz do projeto. Vale para as notificações que o sistema mostra (app em
+   * segundo plano) e para as que o SDK mostra. Sem ele, o Android usa o ícone do app, que aparece
+   * como um quadrado branco.
+   */
+  notificationIcon?: string;
 };
 
 const CAMERA_TEXT = 'Para enviar fotos no chat de atendimento.';
@@ -28,6 +44,9 @@ const MICROPHONE_TEXT = 'Para gravar mensagens de voz no chat de atendimento.';
 const META_CHANNEL_TOKEN = 'ai.atalia.chat.CHANNEL_TOKEN';
 const META_BASE_URL = 'ai.atalia.chat.BASE_URL';
 const META_CUSTOM_DOMAIN = 'ai.atalia.chat.CUSTOM_DOMAIN';
+/** Ícone das notificações do Firebase. O módulo Android também o usa nas notificações do SDK. */
+const META_FIREBASE_ICON = 'com.google.firebase.messaging.default_notification_icon';
+const ICON_RESOURCE = 'atalia_notification_icon';
 
 const withAtaliaIos: ConfigPlugin<AtaliaPluginProps> = (config, props) =>
   withInfoPlist(config, (mod) => {
@@ -53,6 +72,7 @@ const withAtaliaAndroid: ConfigPlugin<AtaliaPluginProps> = (config, props) => {
   }
   if (props.notifications !== false) permissions.push('android.permission.POST_NOTIFICATIONS');
   config = AndroidConfig.Permissions.withPermissions(config, permissions);
+  if (props.notificationIcon) config = withNotificationIcon(config, props.notificationIcon);
 
   return withAndroidManifest(config, (mod) => {
     const app = AndroidConfig.Manifest.getMainApplicationOrThrow(mod.modResults);
@@ -63,9 +83,31 @@ const withAtaliaAndroid: ConfigPlugin<AtaliaPluginProps> = (config, props) => {
     set(META_CHANNEL_TOKEN, props.channelToken);
     set(META_BASE_URL, props.baseUrl);
     set(META_CUSTOM_DOMAIN, props.customDomain === true ? 'true' : undefined);
+    // Ícone já definido por outro plugin (expo-notifications, @react-native-firebase/messaging) vence:
+    // é um só para todas as notificações do Firebase no app.
+    const hasIcon = (app['meta-data'] ?? []).some((item) => item.$['android:name'] === META_FIREBASE_ICON);
+    if (props.notificationIcon && !hasIcon) {
+      AndroidConfig.Manifest.addMetaDataItemToMainApplication(app, META_FIREBASE_ICON, `@drawable/${ICON_RESOURCE}`, 'resource');
+    }
     return mod;
   });
 };
+
+/** Copia o PNG para os recursos do app. Uma densidade só (xxxhdpi): o Android reduz para as outras. */
+const withNotificationIcon: ConfigPlugin<string> = (config, icon) =>
+  withDangerousMod(config, [
+    'android',
+    async (mod) => {
+      const source = path.resolve(mod.modRequest.projectRoot, icon);
+      if (path.extname(source).toLowerCase() !== '.png' || !fs.existsSync(source)) {
+        throw new Error(`[@atalia/react-native-chat] notificationIcon: PNG não encontrado em ${source}`);
+      }
+      const dir = path.join(mod.modRequest.platformProjectRoot, 'app', 'src', 'main', 'res', 'drawable-xxxhdpi');
+      await fs.promises.mkdir(dir, { recursive: true });
+      await fs.promises.copyFile(source, path.join(dir, `${ICON_RESOURCE}.png`));
+      return mod;
+    },
+  ]);
 
 const withAtalia: ConfigPlugin<AtaliaPluginProps | void> = (config, props) => {
   const options = props || {};

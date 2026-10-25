@@ -150,8 +150,24 @@ public enum Atalia {
             return
         }
         guard let host = presenter ?? topViewController() else { return }
-        let chat = AtaliaChatViewController(conversationId: conversationId)
-        chat.modalPresentationStyle = config.options.presentationStyle == .pageSheet ? .pageSheet : .fullScreen
+        let chat: AtaliaChatViewController
+        if let prepared = ChatPrewarm.take() {
+            // Pré-carregado pelo botão flutuante: já sai do segundo plano durante a animação.
+            chat = prepared
+            chat.activate(conversationId: conversationId)
+        } else {
+            chat = AtaliaChatViewController(conversationId: conversationId)
+            chat.recyclable = true
+        }
+        if config.options.presentationStyle == .pageSheet {
+            chat.modalPresentationStyle = .pageSheet
+            if let sheet = chat.sheetPresentationController {
+                sheet.detents = [.large()]
+                sheet.prefersGrabberVisible = true
+            }
+        } else {
+            chat.modalPresentationStyle = .fullScreen
+        }
         chat.onClose = { [weak chat] in chat?.dismiss(animated: true) }
         host.present(chat, animated: animated)
     }

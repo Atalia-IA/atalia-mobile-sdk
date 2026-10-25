@@ -5,9 +5,11 @@ public struct AtaliaOptions {
     /// Endereço de produção do chat da Atalia.
     public static let defaultBaseURL = URL(string: "https://chat.atalia.ai")!
 
-    /// Como a tela do chat é apresentada por `Atalia.present(from:)`.
+    /// Como a tela do chat é apresentada por `Atalia.present(from:)` e `.ataliaChat(isPresented:)`.
     public enum PresentationStyle {
+        /// O chat ocupa a tela inteira.
         case fullScreen
+        /// Folha que sobe sobre o app, com a alça no topo. Arrastar para baixo fecha.
         case pageSheet
     }
 
@@ -28,7 +30,7 @@ public struct AtaliaOptions {
         baseURL: URL = AtaliaOptions.defaultBaseURL,
         customDomain: Bool = false,
         closeButton: Bool = true,
-        presentationStyle: PresentationStyle = .fullScreen,
+        presentationStyle: PresentationStyle = .pageSheet,
         debug: Bool = false,
         appBadge: Bool = true
     ) {

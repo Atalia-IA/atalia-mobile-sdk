@@ -6,7 +6,7 @@ export type AtaliaOptions = {
   customDomain?: boolean;
   /** Mostra o botão "Fechar" no chat. Padrão: `true`. */
   closeButton?: boolean;
-  /** iOS: o chat abre em tela cheia (padrão) ou como folha. */
+  /** Como o chat abre: folha que sobe sobre o app (`pageSheet`, padrão) ou tela cheia (`fullScreen`). */
   presentationStyle?: 'fullScreen' | 'pageSheet';
   /** Permite inspecionar o WebView (Safari no iOS, `chrome://inspect` no Android). Nunca em produção. */
   debug?: boolean;
@@ -70,8 +70,10 @@ export type AtaliaLauncherOptions = {
   horizontalMargin?: number;
   /** Distância do fim da tela, além da área segura. Aumente para ficar acima de uma barra de abas. Padrão: 16. */
   bottomMargin?: number;
-  /** Texto do botão aberto. Padrão: o do painel ("Fale conosco"). */
+  /** Título do botão aberto. Padrão: o do painel ("Fale conosco"). */
   text?: string;
+  /** Linha de baixo do botão aberto. Padrão: o nome do atendimento no painel; `''` = sem subtítulo. */
+  subtitle?: string;
   /** Cor do botão, `#RRGGBB`. Padrão: a do painel. */
   color?: string;
   /** Forma depois de recolher: `circle` (padrão), `edge` (aba na lateral) ou `never` (sempre com o texto). */
@@ -80,4 +82,8 @@ export type AtaliaLauncherOptions = {
   collapseAfter?: number;
   /** O usuário pode arrastar o botão; ao soltar, ele gruda na lateral mais próxima. Padrão: `false`. */
   draggable?: boolean;
+  /** Puxar o botão até a borda o esconde numa aba; tocar ou puxar a aba traz de volta. Padrão: `true`. */
+  dockable?: boolean;
+  /** Carrega o chat escondido enquanto o botão está na tela: o toque abre o chat pronto. Padrão: `true`. */
+  preloadChat?: boolean;
 };

@@ -22,6 +22,7 @@ O JSON do fragmento:
 | `identity` | JWT | Opcional. Mesmo efeito do `identify`. |
 | `conversationId` | inteiro | Abre direto nessa conversa (toque numa notificação). |
 | `closeButton` | booleano | `false` esconde o botão "Fechar". |
+| `background` | booleano | `true` = chat pré-carregado pelo botão flutuante: a página nasce em segundo plano (sem WebSocket, sem heartbeat, sem marcar lidas) até o `app_state` `foreground`. Ausente = primeiro plano. |
 
 O widget só aceita esses dados quando encontra o bridge nativo (`window.webkit.messageHandlers.atalia` no iOS, `window.AtaliaAndroid` no Android). Num navegador comum o fragmento é descartado.
 

@@ -27,7 +27,9 @@ class AtaliaCoreTest {
         var identifyResponse = ApiResponse(404, null)
         var unreadResponse = ApiResponse(200, JSONObject().put("total", 0))
 
-        override suspend fun channelConfig() = ApiResponse(200, JSONObject().put("branding", JSONObject().put("primary_color", "#112233")))
+        var config = ApiResponse(200, JSONObject().put("branding", JSONObject().put("primary_color", "#112233")))
+
+        override suspend fun channelConfig() = config
 
         override suspend fun createSession(sessionToken: String): ApiResponse {
             calls += "sessions:$sessionToken"
@@ -215,6 +217,22 @@ class AtaliaCoreTest {
         assertEquals("texto em branco cai no padrão do site", "Fale conosco", branding.buttonText)
         assertTrue(branding.buttonOnStart)
         assertEquals(branding, ChannelBranding.fromJson(JSONObject(branding.toJson())))
+    }
+
+    @Test
+    fun launcherSubtitleIsTheBotNameOrTheChannelName() {
+        val named = ChannelBranding.fromJson(JSONObject().put("bot_name", "Ana"), "Loja Centro")
+        assertEquals("Ana", named.botName)
+        assertEquals("sem nome do atendimento, o do canal", "Loja Centro", ChannelBranding.fromJson(JSONObject(), "Loja Centro").botName)
+        assertEquals(named, ChannelBranding.fromJson(JSONObject(named.toJson())))
+    }
+
+    @Test
+    fun launcherWaitsForTheChannelOnTheFirstRun() = runTest {
+        assertNull("sem cache, o botão espera a aparência do canal", state.branding.value)
+        api.config = ApiResponse(503, null)
+        core.loadBranding()
+        assertEquals("canal fora do ar: aparece com o padrão", ChannelBranding(), state.branding.value)
     }
 
     @Test

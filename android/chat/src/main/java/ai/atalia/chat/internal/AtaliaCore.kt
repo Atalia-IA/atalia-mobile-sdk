@@ -81,7 +81,9 @@ internal class AtaliaCore(
     val primaryColor: String? get() = branding.primaryColor
 
     init {
-        state.branding.value = branding
+        // Sem cache, o estado fica nulo até a primeira consulta: o botão flutuante não aparece com
+        // a cor padrão para trocar de cor um instante depois.
+        state.branding.value = store.loadBranding()
         state.identified.value = store.load()?.identified ?: false
     }
 
@@ -227,11 +229,15 @@ internal class AtaliaCore(
     // Canal
 
     suspend fun loadBranding() {
-        val response = runCatching { api.channelConfig() }.getOrNull() ?: return
-        if (!response.isSuccess) return
-        val json = response.json?.optJSONObject("branding") ?: return
-        val fresh = ChannelBranding.fromJson(json)
-        if (fresh == branding) return
+        val response = runCatching { api.channelConfig() }.getOrNull()
+        val json = response?.takeIf { it.isSuccess }?.json?.optJSONObject("branding")
+        if (json == null) {
+            // Sem rede ou canal fora do ar: o botão aparece com a aparência padrão (ou a do cache).
+            if (state.branding.value == null) state.branding.value = branding
+            return
+        }
+        val fresh = ChannelBranding.fromJson(json, response?.json?.opt("name") as? String)
+        if (fresh == branding && state.branding.value != null) return
         val colorChanged = fresh.primaryColor != branding.primaryColor
         branding = fresh
         state.branding.value = fresh

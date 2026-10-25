@@ -16,6 +16,7 @@ final class ChatURLBuilderTests: XCTestCase {
             fragment.session = expectedJson["session"] as? String
             fragment.conversationId = expectedJson["conversationId"] as? Int
             fragment.closeButton = expectedJson["closeButton"] as? Bool ?? true
+            fragment.background = expectedJson["background"] as? Bool ?? false
 
             let url = ChatURLBuilder.url(
                 baseURL: try XCTUnwrap(URL(string: try XCTUnwrap(item["baseUrl"] as? String))),

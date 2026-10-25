@@ -77,9 +77,11 @@ final class AtaliaCore {
         }
         state.isIdentified = store.load()?.identified ?? false
         // Aparência da última abertura: a tela aberta pelo toque numa notificação, logo ao iniciar o
-        // app, já nasce com o topo certo, e o botão flutuante não troca de lado nem de cor.
-        branding = store.loadBranding() ?? ChannelBranding()
-        state.branding = branding
+        // app, já nasce com o topo certo, e o botão flutuante não troca de lado nem de cor. Sem
+        // cache, o botão espera a primeira consulta em vez de aparecer com a cor padrão.
+        let cached = store.loadBranding()
+        branding = cached ?? ChannelBranding()
+        state.branding = cached
         observeForeground()
         Task { [weak self] in
             await self?.loadChannelBranding()
@@ -399,13 +401,15 @@ final class AtaliaCore {
     // MARK: Canal
 
     private func loadChannelBranding() async {
-        guard let config = configuration,
-              let response = try? await config.api.channelConfig(),
-              response.isSuccess,
-              let json = response.json?["branding"] as? [String: Any]
-        else { return }
-        let fresh = ChannelBranding(json: json)
-        guard fresh != branding else { return }
+        guard let config = configuration else { return }
+        let response = try? await config.api.channelConfig()
+        guard let response, response.isSuccess, let json = response.json?["branding"] as? [String: Any] else {
+            // Sem rede ou canal fora do ar: o botão aparece com a aparência padrão (ou a do cache).
+            if state.branding == nil { state.branding = branding }
+            return
+        }
+        let fresh = ChannelBranding(json: json, channelName: response.json?["name"] as? String)
+        guard fresh != branding || state.branding == nil else { return }
         let colorChanged = fresh.primaryColor != branding.primaryColor
         branding = fresh
         state.branding = fresh

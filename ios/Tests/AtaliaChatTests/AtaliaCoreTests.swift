@@ -244,6 +244,24 @@ final class AtaliaCoreTests: XCTestCase {
         XCTAssertEqual(ChannelBranding(json: ["primary_color": "#112233"]).buttonColor, "#112233")
     }
 
+    func testLauncherSubtitleIsTheBotNameOrTheChannelName() throws {
+        let named = ChannelBranding(json: ["bot_name": "Ana"], channelName: "Loja Centro")
+        XCTAssertEqual(named.botName, "Ana")
+        XCTAssertEqual(ChannelBranding(json: [:], channelName: "Loja Centro").botName, "Loja Centro", "sem nome do atendimento, o do canal")
+        // O cache de versões antigas (sem o nome) continua lendo.
+        let old = try JSONDecoder().decode(ChannelBranding.self, from: Data(##"{"primaryColor":"#112233"}"##.utf8))
+        XCTAssertNil(old.botName)
+        XCTAssertEqual(old.primaryColor, "#112233")
+    }
+
+    func testLauncherWaitsForTheChannelOnTheFirstRun() async {
+        StubURLProtocol.stubs["GET \(base)"] = .init(status: 503, json: nil)
+        let core = makeCore(store: MemorySessionStore())
+        XCTAssertNil(core.state.branding, "sem cache, o botão espera a aparência do canal")
+        await settle()
+        XCTAssertEqual(core.state.branding, ChannelBranding(), "canal fora do ar: aparece com o padrão")
+    }
+
     func testChatOpenStateFollowsTheScreen() {
         XCTAssertFalse(core.state.isChatOpen)
         let chat = FakeChat()

@@ -69,6 +69,12 @@ class AtaliaChatView @JvmOverloads constructor(
     private var ready = false
     private val pendingCommands = mutableListOf<Pair<String, JSONObject?>>()
     private var currentConversationId: Long? = null
+    /** Estado com que a página nasceu e o último pedido antes do `ready` (só vale o último). */
+    private var bornState = APP_FOREGROUND
+    private var pendingAppState: String? = null
+
+    /** Canal, origem e sessão com que a página foi carregada: o chat pré-carregado só serve a eles. */
+    private var loadedFor: Triple<String, String, String?>? = null
 
     private val bridgeTarget = object : ChatBridgeTarget {
         override fun sendCommand(type: String, payload: JSONObject?) = this@AtaliaChatView.sendCommand(type, payload)
@@ -86,13 +92,21 @@ class AtaliaChatView @JvmOverloads constructor(
     private val core: AtaliaCore? get() = Atalia.coreOrNull()
 
     /** Carrega o chat; com [conversationId], direto nessa conversa. */
+    fun load(conversationId: Long? = null) = load(conversationId, background = false)
+
+    /**
+     * [background]: chat pré-carregado escondido. A página nasce em segundo plano (sem socket, sem
+     * presença, sem marcar lidas) e só vira o chat da tela no [activate].
+     */
     @SuppressLint("SetJavaScriptEnabled")
-    fun load(conversationId: Long? = null) {
+    internal fun load(conversationId: Long?, background: Boolean) {
         val core = core ?: return
         currentConversationId = conversationId
         destroyWebView()
         hideError()
         ready = false
+        bornState = if (background) APP_BACKGROUND else APP_FOREGROUND
+        pendingAppState = null
         progress.visibility = VISIBLE
 
         val webView = WebView(context)
@@ -114,13 +128,15 @@ class AtaliaChatView @JvmOverloads constructor(
         installBridge(webView, core)
         addView(webView, 0, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         this.webView = webView
-        core.activeChat = bridgeTarget
+        if (!background) core.activeChat = bridgeTarget
+        loadedFor = Triple(core.channelToken, core.options.baseUrl, core.storedSessionToken)
 
         val fragment = SdkFragment(
             appVersion = appVersion(),
             session = core.storedSessionToken,
             conversationId = conversationId,
             closeButton = core.options.closeButton,
+            background = background,
         )
         webView.loadUrl(ChatUrl.build(core.options.baseUrl, core.channelToken, core.options.customDomain, fragment))
     }
@@ -137,13 +153,30 @@ class AtaliaChatView @JvmOverloads constructor(
      */
     fun onAppForeground() {
         webView?.onResume()
-        sendCommand("app_state", JSONObject().put("state", "foreground"))
+        sendCommand("app_state", JSONObject().put("state", APP_FOREGROUND))
     }
 
     fun onAppBackground() {
-        sendCommand("app_state", JSONObject().put("state", "background"))
+        sendCommand("app_state", JSONObject().put("state", APP_BACKGROUND))
         webView?.onPause()
     }
+
+    /** Apareceu na tela: vira o chat do app (identify passa por ele, notificação não aparece) e reconecta. */
+    internal fun activate() {
+        core?.activeChat = bridgeTarget
+        onAppForeground()
+    }
+
+    /** Saiu da tela, mas fica carregado: volta a esperar escondido, sem socket. */
+    internal fun deactivate() {
+        val core = core
+        if (core?.activeChat === bridgeTarget) core.activeChat = null
+        sendCommand("app_state", JSONObject().put("state", APP_BACKGROUND))
+    }
+
+    /** Carregou sem erro, para o mesmo canal e a mesma sessão de agora. */
+    internal fun isReusable(core: AtaliaCore): Boolean =
+        webView != null && errorView == null && loadedFor == Triple(core.channelToken, core.options.baseUrl, core.storedSessionToken)
 
     /** Chame no `onDestroy` de quem hospeda. */
     fun destroy() {
@@ -179,6 +212,8 @@ class AtaliaChatView @JvmOverloads constructor(
                 flushPendingCommands()
             }
             "error" -> if (message.string("command") == null) progress.visibility = GONE
+            // A sessão nova (criada ou trocada pelo widget) passa a ser a desta página.
+            "session_changed" -> message.string("sessionToken")?.let { token -> loadedFor = loadedFor?.copy(third = token) }
             "close" -> host?.onCloseRequested()
             "open_url" -> message.string("url")?.let(::openExternal)
             "download" -> message.string("url")?.let { download(it, message.string("filename"), message.string("mimeType")) }
@@ -189,8 +224,8 @@ class AtaliaChatView @JvmOverloads constructor(
     private fun sendCommand(type: String, payload: JSONObject?) {
         val webView = webView
         if (!ready || webView == null) {
-            // Estado do app antes de o chat carregar não vale nada: ele já nasce em primeiro plano.
-            if (type != "app_state") pendingCommands += type to payload
+            // Do estado do app, só o último pedido importa, e só se for diferente do que a página nasceu.
+            if (type == "app_state") pendingAppState = payload?.optString("state") else pendingCommands += type to payload
             return
         }
         val command = JSONObject().put("type", type).apply { payload?.let { put("payload", it) } }
@@ -198,6 +233,8 @@ class AtaliaChatView @JvmOverloads constructor(
     }
 
     private fun flushPendingCommands() {
+        pendingAppState?.takeIf { it != bornState }?.let { sendCommand("app_state", JSONObject().put("state", it)) }
+        pendingAppState = null
         val commands = pendingCommands.toList()
         pendingCommands.clear()
         commands.forEach { (type, payload) -> sendCommand(type, payload) }
@@ -344,5 +381,7 @@ class AtaliaChatView @JvmOverloads constructor(
     private companion object {
         const val BRIDGE_NAME = "AtaliaAndroid"
         const val READY_FALLBACK_MS = 8_000L
+        const val APP_FOREGROUND = "foreground"
+        const val APP_BACKGROUND = "background"
     }
 }

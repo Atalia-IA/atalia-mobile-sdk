@@ -3,21 +3,26 @@ package ai.atalia.chat
 import ai.atalia.chat.internal.ChannelBranding
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.res.Configuration
 import android.graphics.Color
+import android.graphics.Rect
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Handler
 import android.os.Looper
 import android.text.TextUtils
-import android.transition.AutoTransition
-import android.transition.TransitionManager
 import android.util.AttributeSet
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
+import android.view.VelocityTracker
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
+import android.view.animation.AccelerateInterpolator
+import android.view.animation.OvershootInterpolator
+import android.view.animation.PathInterpolator
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -25,13 +30,16 @@ import android.widget.TextView
 import androidx.annotation.ColorInt
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.doOnPreDraw
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlin.math.abs
+import kotlin.math.exp
 import kotlin.math.roundToInt
+import kotlin.math.sign
 
 /** Posição e comportamento do botão flutuante. A aparência vem do painel. */
 data class AtaliaLauncherOptions(
@@ -41,15 +49,21 @@ data class AtaliaLauncherOptions(
     val horizontalMarginDp: Int = 16,
     /** Distância do fim da tela, além da barra de navegação (em [Atalia.showLauncher]). Aumente para ficar acima de uma barra de abas. */
     val bottomMarginDp: Int = 16,
-    /** Texto do botão aberto. Nulo = o do painel ("Fale conosco"). */
+    /** Título do botão aberto. Nulo = o do painel ("Fale conosco"). */
     val text: String? = null,
-    /** Nula = a cor do botão no painel. */
+    /** Linha de baixo do botão aberto. Nulo = o nome do atendimento no painel; vazio = sem subtítulo. */
+    val subtitle: String? = null,
+    /** Cor do círculo e da aba. Nula = a cor do botão no painel. */
     @ColorInt val color: Int? = null,
     val collapse: Collapse = Collapse.CIRCLE,
-    /** Tempo com o texto antes de recolher. Volta a abrir quando chega mensagem nova. */
+    /** Tempo aberto antes de recolher. Volta a abrir quando chega mensagem nova. */
     val collapseAfterMs: Long = 5_000,
     /** O usuário pode arrastar o botão; ao soltar, ele gruda na lateral mais próxima. Só em [Atalia.showLauncher]. */
     val draggable: Boolean = false,
+    /** Puxar o botão até a borda o esconde numa aba; tocar ou puxar a aba traz de volta. */
+    val dockable: Boolean = true,
+    /** Carrega o chat escondido enquanto o botão está na tela: o toque abre o chat pronto. */
+    val preloadChat: Boolean = true,
     /** O que o toque faz. Nulo = [Atalia.open]. */
     val onClick: (() -> Unit)? = null,
 ) {
@@ -63,14 +77,18 @@ data class AtaliaLauncherOptions(
         /** Uma aba encostada na lateral; o toque mostra o botão de novo. */
         EDGE,
 
-        /** Fica sempre com o texto. */
+        /** Fica sempre aberto. */
         NEVER,
     }
 }
 
 /**
- * Botão flutuante que abre o chat. A aparência (cor, texto e lado) vem do painel da Atalia, a mesma
- * do botão do site; posição e comportamento são do app.
+ * Botão flutuante que abre o chat. A aparência (cor, texto, nome do atendimento e lado) vem do
+ * painel da Atalia; posição e comportamento são do app.
+ *
+ * Aberto, é uma pílula com o título e o nome do atendimento saindo de trás do círculo colorido. Com
+ * o botão parado, puxar faz um efeito elástico; puxar até a borda o esconde numa aba, e tocar (ou
+ * puxar) a aba o traz de volta.
  *
  * O jeito mais simples é [Atalia.showLauncher], que serve para telas com View e com Compose. Para
  * posicionar você mesmo, use como qualquer view (no Compose, dentro de um `AndroidView`).
@@ -85,27 +103,37 @@ class AtaliaLauncherView @JvmOverloads constructor(
     var options: AtaliaLauncherOptions = options
         set(value) {
             field = value
-            expanded = true
-            render(animate = true)
-            scheduleCollapse()
+            if (state == State.DOCKED) undock(animate = false)
+            expand()
         }
 
-    private enum class Shape { PILL, CIRCLE, EDGE }
+    private enum class State { EXPANDED, CIRCLE, DOCKED }
 
-    private val shapeDrawable = GradientDrawable()
-    private val body = LinearLayout(context)
+    private val circleSize = dp(CIRCLE_DP)
+    private val circleDrawable = GradientDrawable().apply { shape = GradientDrawable.OVAL }
+    private val haloDrawable = GradientDrawable().apply { shape = GradientDrawable.OVAL }
+    private val tabDrawable = GradientDrawable()
+    private val pillDrawable = GradientDrawable()
+
+    private val pill = LinearLayout(context)
+    private val title = TextView(context)
+    private val subtitle = TextView(context)
+    private val halo = View(context)
+    private val circle = FrameLayout(context)
     private val icon = ImageView(context)
-    private val label = TextView(context)
     private val badge = TextView(context)
+    private val tab = FrameLayout(context)
+    private val chevron = ImageView(context)
+
     private val mainHandler = Handler(Looper.getMainLooper())
     private var scope: CoroutineScope? = null
+    private var preloadRegistered = false
 
     private var branding: ChannelBranding? = null
     private var unread = 0
     private var lastUnread: Int? = null
     private var chatOpen = false
-    private var expanded = true
-    private var shape: Shape? = null
+    private var state = State.EXPANDED
     private var side = AtaliaLauncherOptions.Side.END
     /** Lado escolhido pelo usuário ao arrastar (vence o das opções). */
     private var draggedSide: AtaliaLauncherOptions.Side? = null
@@ -114,36 +142,57 @@ class AtaliaLauncherView @JvmOverloads constructor(
     internal var positionedBySdk = false
     private var systemBars = WindowInsetsCompat.CONSUMED.getInsets(WindowInsetsCompat.Type.systemBars())
 
-    private val collapseRunnable = Runnable {
-        expanded = false
-        render(animate = true)
-    }
+    private val collapseRunnable = Runnable { collapse() }
 
     init {
         clipChildren = false
         clipToPadding = false
-        // Espaço para a sombra e para o contador, que sai um pouco do botão.
+        // Espaço para a sombra, o halo do toque e o contador, que saem um pouco do círculo.
         setPadding(dp(INSET_DP), dp(INSET_DP), dp(INSET_DP), dp(INSET_DP))
 
-        body.orientation = LinearLayout.HORIZONTAL
-        body.gravity = Gravity.CENTER_VERTICAL
-        body.background = shapeDrawable
-        body.elevation = dp(6).toFloat()
-        body.isClickable = true
-        body.isFocusable = true
-        body.setOnClickListener { onTap() }
+        // Pílula branca, por trás do círculo: título e nome do atendimento.
+        pill.orientation = LinearLayout.VERTICAL
+        pill.gravity = Gravity.CENTER_VERTICAL
+        pill.background = pillDrawable.apply { cornerRadius = circleSize / 2f }
+        pill.elevation = dp(6).toFloat()
+        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+        title.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        subtitle.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f)
+        for (text in listOf(title, subtitle)) {
+            text.maxLines = 1
+            text.ellipsize = TextUtils.TruncateAt.END
+            pill.addView(text, LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
+        }
+        addView(pill, LayoutParams(LayoutParams.WRAP_CONTENT, circleSize, Gravity.CENTER_VERTICAL))
+
+        // Halo do toque: aparece em volta do círculo enquanto o dedo está nele.
+        halo.background = haloDrawable
+        halo.alpha = 0f
+        halo.scaleX = 0.7f
+        halo.scaleY = 0.7f
+        halo.elevation = dp(7).toFloat()
+        addView(halo, LayoutParams(circleSize + dp(HALO_DP) * 2, circleSize + dp(HALO_DP) * 2, Gravity.CENTER_VERTICAL))
+
+        circle.background = circleDrawable
+        circle.elevation = dp(8).toFloat()
         icon.setImageResource(R.drawable.atalia_ic_chat)
-        label.setTextColor(Color.WHITE)
-        label.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
-        label.typeface = Typeface.DEFAULT_BOLD
-        label.maxLines = 1
-        label.ellipsize = TextUtils.TruncateAt.END
-        body.addView(icon, LinearLayout.LayoutParams(dp(24), dp(24)))
-        body.addView(label, LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply { marginStart = dp(8) })
-        addView(body, LayoutParams(LayoutParams.WRAP_CONTENT, dp(HEIGHT_DP)))
+        circle.addView(icon, LayoutParams(dp(26), dp(26), Gravity.CENTER))
+        addView(circle, LayoutParams(circleSize, circleSize, Gravity.CENTER_VERTICAL))
+
+        // Aba da borda: metade escondida além da tela, com a seta para dentro.
+        tab.background = tabDrawable.apply { cornerRadius = dp(16).toFloat() }
+        tab.elevation = dp(8).toFloat()
+        chevron.setImageResource(R.drawable.atalia_ic_chevron)
+        tab.addView(chevron, LayoutParams(dp(20), dp(20), Gravity.CENTER_VERTICAL))
+        tab.visibility = GONE
+        // A aba fica na faixa do gesto "voltar" do sistema: sem a exclusão, puxá-la fecha a tela do app.
+        tab.addOnLayoutChangeListener { view, left, top, right, bottom, _, _, _, _ ->
+            ViewCompat.setSystemGestureExclusionRects(view, listOf(Rect(0, 0, right - left, bottom - top)))
+        }
+        addView(tab, LayoutParams(dp(TAB_WIDTH_DP), circleSize, Gravity.CENTER_VERTICAL))
 
         badge.setTextColor(Color.WHITE)
-        badge.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+        badge.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f)
         badge.typeface = Typeface.DEFAULT_BOLD
         badge.gravity = Gravity.CENTER
         badge.minWidth = dp(20)
@@ -153,12 +202,13 @@ class AtaliaLauncherView @JvmOverloads constructor(
             cornerRadius = dp(10).toFloat()
             setStroke((1.5f * resources.displayMetrics.density).roundToInt(), Color.WHITE)
         }
-        badge.elevation = dp(7).toFloat()
+        badge.elevation = dp(9).toFloat()
         badge.importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
-        addView(badge, LayoutParams(LayoutParams.WRAP_CONTENT, dp(20), Gravity.TOP or Gravity.END))
+        badge.visibility = GONE
+        addView(badge, LayoutParams(LayoutParams.WRAP_CONTENT, dp(20), Gravity.TOP))
 
-        setupDrag()
-        render(animate = false)
+        setupGestures()
+        render()
     }
 
     /** Tira o botão da tela. */
@@ -169,18 +219,40 @@ class AtaliaLauncherView @JvmOverloads constructor(
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate).also { scope = it }
-        scope.launch { Atalia.brandingFlow.collect { branding = it; render(animate = false) } }
-        scope.launch { Atalia.isChatOpen.collect { chatOpen = it; render(animate = false) } }
+        scope.launch {
+            Atalia.brandingFlow.collect {
+                val appearing = branding == null && it != null
+                branding = it
+                render()
+                if (appearing && !chatOpen) appear()
+            }
+        }
+        scope.launch {
+            Atalia.isChatOpen.collect {
+                val closed = chatOpen && !it
+                chatOpen = it
+                render()
+                if (closed && branding != null) appear()
+            }
+        }
         scope.launch {
             Atalia.unreadCount.collect { count ->
-                // Mensagem nova: o botão abre de novo com o texto, como um aviso.
+                // Mensagem nova: o botão "pula" e abre de novo, como um aviso.
                 val previous = lastUnread
                 lastUnread = count
                 unread = count
-                if (previous != null && count > previous) expand() else render(animate = false)
+                render()
+                if (previous != null && count > previous) {
+                    if (state == State.DOCKED) undock(animate = true) else expand()
+                    pop()
+                }
             }
         }
         if (positionedBySdk) ViewCompat.requestApplyInsets(this)
+        if (options.preloadChat) {
+            preloadRegistered = true
+            ChatPrewarm.launcherAttached(context)
+        }
         scheduleCollapse()
     }
 
@@ -188,106 +260,344 @@ class AtaliaLauncherView @JvmOverloads constructor(
         scope?.cancel()
         scope = null
         mainHandler.removeCallbacks(collapseRunnable)
+        if (preloadRegistered) {
+            preloadRegistered = false
+            ChatPrewarm.launcherDetached()
+        }
         super.onDetachedFromWindow()
     }
 
-    private fun onTap() {
-        if (shape == Shape.EDGE) {
-            expand()
-            return
-        }
-        options.onClick?.invoke() ?: Atalia.open(context)
-    }
+    // Estados
 
     private fun expand() {
-        expanded = true
-        render(animate = true)
+        if (state == State.DOCKED) return
+        val wasExpanded = state == State.EXPANDED && pill.visibility == VISIBLE
+        state = State.EXPANDED
+        render()
+        if (!wasExpanded) animatePillIn(delay = 0)
         scheduleCollapse()
+    }
+
+    /** Entrada na tela (e na volta do chat): o círculo cresce e a pílula sai de trás dele. */
+    private fun appear() {
+        if (state == State.DOCKED) return
+        circle.scaleX = 0.2f
+        circle.scaleY = 0.2f
+        circle.animate().scaleX(1f).scaleY(1f).setDuration(340).setInterpolator(OvershootInterpolator(1.6f)).start()
+        if (state == State.EXPANDED) animatePillIn(delay = 140)
+        scheduleCollapse()
+    }
+
+    /** A pílula cresce a partir da ponta presa no círculo, e o texto entra logo depois. */
+    private fun animatePillIn(delay: Long) {
+        pill.alpha = 0f
+        pill.doOnPreDraw {
+            pill.pivotX = if (side == AtaliaLauncherOptions.Side.END) pill.width.toFloat() else 0f
+            pill.scaleX = 0.3f
+            pill.animate().scaleX(1f).alpha(1f).setStartDelay(delay).setDuration(340)
+                .setInterpolator(OvershootInterpolator(1.1f)).start()
+            for (text in listOf(title, subtitle)) {
+                text.alpha = 0f
+                text.translationX = dp(10) * if (side == AtaliaLauncherOptions.Side.END) 1f else -1f
+                text.animate().alpha(1f).translationX(0f).setStartDelay(delay + 90).setDuration(240).start()
+            }
+        }
+    }
+
+    private fun collapse() {
+        when (options.collapse) {
+            AtaliaLauncherOptions.Collapse.NEVER -> return
+            AtaliaLauncherOptions.Collapse.EDGE -> dock()
+            AtaliaLauncherOptions.Collapse.CIRCLE -> {
+                if (state != State.EXPANDED) return
+                pill.animate().scaleX(0.3f).alpha(0f).setStartDelay(0).setDuration(180).setInterpolator(AccelerateInterpolator())
+                    .withEndAction {
+                        state = State.CIRCLE
+                        render()
+                    }.start()
+            }
+        }
+    }
+
+    /** Esconde na borda: o círculo sai pela lateral e a aba entra no lugar. */
+    private fun dock() {
+        if (state == State.DOCKED) return
+        mainHandler.removeCallbacks(collapseRunnable)
+        haptic(HapticFeedbackConstants.CONTEXT_CLICK)
+        val out = dp(CIRCLE_DP + INSET_DP + options.horizontalMarginDp) * outwardSign()
+        pill.animate().alpha(0f).setStartDelay(0).setDuration(120).start()
+        circle.animate().translationX(out).setDuration(200).setInterpolator(AccelerateInterpolator()).withEndAction {
+            circle.translationX = 0f
+            state = State.DOCKED
+            render()
+            tab.translationX = dp(TAB_WIDTH_DP) * outwardSign()
+            tab.animate().translationX(0f).setDuration(260).setInterpolator(OvershootInterpolator(1.2f)).start()
+        }.start()
+    }
+
+    /** Volta da borda: a aba sai, o círculo entra girando o ícone e o botão abre. */
+    private fun undock(animate: Boolean) {
+        if (state != State.DOCKED) return
+        haptic(HapticFeedbackConstants.CONTEXT_CLICK)
+        state = State.CIRCLE
+        render()
+        if (animate) {
+            circle.scaleX = 0.5f
+            circle.scaleY = 0.5f
+            icon.rotation = -120f * outwardSign()
+            circle.animate().scaleX(1f).scaleY(1f).setDuration(320).setInterpolator(OvershootInterpolator(1.6f)).start()
+            icon.animate().rotation(0f).setDuration(380).setInterpolator(PathInterpolator(0.2f, 0.9f, 0.1f, 1f)).start()
+            mainHandler.postDelayed({ expand() }, 160)
+        } else {
+            expand()
+        }
+    }
+
+    /** Aviso de mensagem nova: o círculo cresce e volta. */
+    private fun pop() {
+        circle.animate().scaleX(1.14f).scaleY(1.14f).setDuration(120).withEndAction {
+            circle.animate().scaleX(1f).scaleY(1f).setDuration(260).setInterpolator(OvershootInterpolator(2f)).start()
+        }.start()
     }
 
     private fun scheduleCollapse() {
         mainHandler.removeCallbacks(collapseRunnable)
-        if (expanded && options.collapse != AtaliaLauncherOptions.Collapse.NEVER) {
+        if (state == State.EXPANDED && options.collapse != AtaliaLauncherOptions.Collapse.NEVER) {
             mainHandler.postDelayed(collapseRunnable, options.collapseAfterMs.coerceAtLeast(0))
         }
     }
 
-    private fun render(animate: Boolean) {
+    private fun render() {
         val branding = branding
-        visibility = if (branding == null || chatOpen) View.GONE else View.VISIBLE
+        visibility = if (branding == null || chatOpen) GONE else VISIBLE
         if (branding == null) return
 
         side = draggedSide ?: options.side ?: if (branding.buttonOnStart) AtaliaLauncherOptions.Side.START else AtaliaLauncherOptions.Side.END
-        val next = when {
-            expanded -> Shape.PILL
-            options.collapse == AtaliaLauncherOptions.Collapse.CIRCLE -> Shape.CIRCLE
-            options.collapse == AtaliaLauncherOptions.Collapse.EDGE -> Shape.EDGE
-            else -> Shape.PILL
-        }
-        if (animate && next != shape) TransitionManager.beginDelayedTransition(this, AutoTransition().setDuration(220))
-        shape = next
-
-        val text = options.text ?: branding.buttonText
-        shapeDrawable.setColor(options.color ?: parseColor(branding.buttonColor) ?: DEFAULT_COLOR)
-        label.text = text
         val start = side == AtaliaLauncherOptions.Side.START
-        (body.layoutParams as LayoutParams).gravity = Gravity.BOTTOM or if (start) Gravity.START else Gravity.END
-        when (next) {
-            Shape.PILL -> {
-                icon.setImageResource(R.drawable.atalia_ic_chat)
-                icon.rotation = 0f
-                label.visibility = View.VISIBLE
-                shapeDrawable.cornerRadius = dp(HEIGHT_DP / 2).toFloat()
-                body.layoutParams.width = LayoutParams.WRAP_CONTENT
-                body.setPadding(dp(18), 0, dp(22), 0)
-            }
-            Shape.CIRCLE -> {
-                icon.setImageResource(R.drawable.atalia_ic_chat)
-                icon.rotation = 0f
-                label.visibility = View.GONE
-                shapeDrawable.cornerRadius = dp(HEIGHT_DP / 2).toFloat()
-                body.layoutParams.width = dp(HEIGHT_DP)
-                body.setPadding(dp(16), 0, dp(16), 0)
-            }
-            Shape.EDGE -> {
-                // A parte de fora fica além da borda da tela: sobra uma aba com a ponta arredondada.
-                icon.setImageResource(R.drawable.atalia_ic_chevron)
-                icon.rotation = if (start) 180f else 0f
-                label.visibility = View.GONE
-                shapeDrawable.cornerRadius = dp(16).toFloat()
-                body.layoutParams.width = dp(EDGE_WIDTH_DP)
-                val visiblePad = (dp(EDGE_WIDTH_DP - EDGE_HIDDEN_DP) - dp(24)) / 2
-                if (start) body.setPadding(dp(EDGE_HIDDEN_DP) + visiblePad, 0, 0, 0) else body.setPadding(visiblePad, 0, 0, 0)
-            }
-        }
-        body.requestLayout()
+        val horizontal = if (start) Gravity.START else Gravity.END
+        val color = options.color ?: parseColor(branding.buttonColor) ?: DEFAULT_COLOR
+        val night = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
 
-        if (unread > 0 && next != Shape.EDGE) {
-            badge.text = if (unread > 99) "99+" else unread.toString()
-            badge.visibility = View.VISIBLE
-            (badge.layoutParams as LayoutParams).gravity = Gravity.TOP or if (start && next == Shape.CIRCLE) Gravity.START else Gravity.END
-        } else {
-            badge.visibility = View.GONE
+        circleDrawable.setColor(color)
+        haloDrawable.setColor(Color.argb(60, Color.red(color), Color.green(color), Color.blue(color)))
+        tabDrawable.setColor(color)
+        pillDrawable.setColor(if (night) Color.parseColor("#1F2937") else Color.WHITE)
+        title.setTextColor(if (night) Color.WHITE else Color.parseColor("#111827"))
+        subtitle.setTextColor(if (night) Color.parseColor("#9CA3AF") else Color.parseColor("#6B7280"))
+
+        val titleText = options.text ?: branding.buttonText
+        val subtitleText = options.subtitle ?: branding.botName.orEmpty()
+        title.text = titleText
+        subtitle.text = subtitleText
+        subtitle.visibility = if (subtitleText.isBlank()) GONE else VISIBLE
+
+        // A pílula fica por trás do círculo: a ponta dela some embaixo dele.
+        val half = circleSize / 2
+        (pill.layoutParams as LayoutParams).apply {
+            gravity = horizontal or Gravity.CENTER_VERTICAL
+            if (start) { marginStart = half; marginEnd = 0 } else { marginEnd = half; marginStart = 0 }
         }
-        body.contentDescription = accessibilityText(text, next)
+        val near = dp(16)
+        val far = half + dp(14)
+        if (start) pill.setPadding(far, 0, near, 0) else pill.setPadding(near, 0, far, 0)
+        (halo.layoutParams as LayoutParams).apply {
+            gravity = horizontal or Gravity.CENTER_VERTICAL
+            if (start) { marginStart = -dp(HALO_DP); marginEnd = 0 } else { marginEnd = -dp(HALO_DP); marginStart = 0 }
+        }
+        (circle.layoutParams as LayoutParams).gravity = horizontal or Gravity.CENTER_VERTICAL
+        (tab.layoutParams as LayoutParams).gravity = horizontal or Gravity.CENTER_VERTICAL
+        // Seta para dentro da tela, na parte da aba que aparece.
+        chevron.rotation = if (start) 180f else 0f
+        (chevron.layoutParams as LayoutParams).apply {
+            val visiblePad = (dp(TAB_WIDTH_DP - EDGE_HIDDEN_DP) - dp(20)) / 2
+            gravity = (if (start) Gravity.END else Gravity.START) or Gravity.CENTER_VERTICAL
+            if (start) { marginEnd = visiblePad; marginStart = 0 } else { marginStart = visiblePad; marginEnd = 0 }
+        }
+
+        val docked = state == State.DOCKED
+        pill.visibility = if (state == State.EXPANDED) VISIBLE else GONE
+        circle.visibility = if (docked) GONE else VISIBLE
+        halo.visibility = if (docked) GONE else VISIBLE
+        tab.visibility = if (docked) VISIBLE else GONE
+
+        if (unread > 0 && !docked) {
+            badge.text = if (unread > 99) "99+" else unread.toString()
+            badge.visibility = VISIBLE
+            (badge.layoutParams as LayoutParams).apply {
+                gravity = Gravity.TOP or horizontal
+                if (start) { marginStart = circleSize - dp(16); marginEnd = 0 } else { marginEnd = -dp(4); marginStart = 0 }
+            }
+        } else {
+            badge.visibility = GONE
+        }
+
+        val description = accessibilityText(titleText)
+        circle.contentDescription = description
+        pill.contentDescription = description
+        tab.contentDescription = resources.getString(R.string.atalia_launcher_show, titleText.lowercase())
+        requestLayout()
 
         if (positionedBySdk) applySdkPosition()
         translationX = edgeShift()
     }
 
-    private fun accessibilityText(text: String, shape: Shape): String {
-        val base = if (shape == Shape.EDGE) resources.getString(R.string.atalia_launcher_show, text.lowercase()) else text
-        return if (unread > 0) resources.getQuantityString(R.plurals.atalia_launcher_unread, unread, base, unread) else base
-    }
+    private fun accessibilityText(text: String): String =
+        if (unread > 0) resources.getQuantityString(R.plurals.atalia_launcher_unread, unread, text, unread) else text
 
     /** Aba na borda: empurra o botão para fora até a parte escondida passar da tela. */
     private fun edgeShift(): Float {
-        if (shape != Shape.EDGE) return 0f
+        if (state != State.DOCKED) return 0f
         val lp = layoutParams as? MarginLayoutParams
         val start = side == AtaliaLauncherOptions.Side.START
         val margin = (if (start) lp?.marginStart else lp?.marginEnd) ?: 0
-        val distance = margin + dp(INSET_DP) + dp(EDGE_HIDDEN_DP)
-        return (if (start) -distance else distance).toFloat()
+        return (margin + dp(INSET_DP) + dp(EDGE_HIDDEN_DP)) * outwardSign()
+    }
+
+    /** +1 empurra para a borda do lado do botão; -1, para dentro da tela. */
+    private fun outwardSign(): Float = if (side == AtaliaLauncherOptions.Side.START) -1f else 1f
+
+    // Gestos
+
+    @SuppressLint("ClickableViewAccessibility")
+    private fun setupGestures() {
+        val slop = ViewConfiguration.get(context).scaledTouchSlop
+        var downX = 0f
+        var downY = 0f
+        var baseTx = 0f
+        var baseTy = 0f
+        var moved = false
+        var tracker: VelocityTracker? = null
+
+        val button = OnTouchListener { touched, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    downX = event.rawX
+                    downY = event.rawY
+                    baseTx = translationX
+                    baseTy = translationY
+                    moved = false
+                    tracker = VelocityTracker.obtain().also { it.addMovement(event) }
+                    animate().cancel()
+                    press(true)
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    tracker?.addMovement(event)
+                    val dx = event.rawX - downX
+                    val dy = event.rawY - downY
+                    if (!moved && (abs(dx) > slop || abs(dy) > slop)) {
+                        moved = true
+                        parent?.requestDisallowInterceptTouchEvent(true)
+                    }
+                    if (moved) {
+                        if (options.draggable && positionedBySdk) {
+                            translationX = baseTx + dx
+                            translationY = baseTy + dy
+                        } else {
+                            // Parado: segue o dedo com resistência, como um elástico.
+                            translationX = baseTx + rubber(dx)
+                            translationY = baseTy + rubber(dy)
+                        }
+                    }
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    tracker?.addMovement(event)
+                    tracker?.computeCurrentVelocity(1000)
+                    val velocityX = tracker?.xVelocity ?: 0f
+                    tracker?.recycle()
+                    tracker = null
+                    press(false)
+                    val dx = event.rawX - downX
+                    val outward = (dx * outwardSign()) > 0
+                    when {
+                        !moved && event.actionMasked == MotionEvent.ACTION_UP -> {
+                            touched.performClick()
+                        }
+                        options.dockable && outward && (abs(dx) > dp(DOCK_DISTANCE_DP) || abs(velocityX) > dp(DOCK_VELOCITY_DP)) -> {
+                            springBack(baseTx, baseTy, quick = true)
+                            dock()
+                        }
+                        options.draggable && positionedBySdk -> settleAfterDrag()
+                        else -> springBack(baseTx, baseTy)
+                    }
+                }
+            }
+            true
+        }
+        circle.setOnTouchListener(button)
+        pill.setOnTouchListener(button)
+        circle.setOnClickListener { onTap() }
+        pill.setOnClickListener { onTap() }
+
+        // Aba: tocar ou puxar para dentro traz o botão de volta.
+        tab.setOnTouchListener { touched, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    downX = event.rawX
+                    baseTx = translationX
+                    moved = false
+                    tab.animate().scaleX(1.08f).scaleY(1.08f).setDuration(90).start()
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = event.rawX - downX
+                    if (!moved && abs(dx) > slop) moved = true
+                    if (moved && dx * outwardSign() < 0) translationX = baseTx + rubber(dx)
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    tab.animate().scaleX(1f).scaleY(1f).setDuration(120).start()
+                    val inward = (event.rawX - downX) * outwardSign() < -dp(UNDOCK_DISTANCE_DP)
+                    if ((!moved && event.actionMasked == MotionEvent.ACTION_UP) || inward) {
+                        if (!moved) touched.performClick()
+                        translationX = baseTx
+                        undock(animate = true)
+                    } else {
+                        springBack(baseTx, translationY)
+                    }
+                }
+            }
+            true
+        }
+        tab.setOnClickListener {}
+    }
+
+    private fun onTap() {
+        haptic(HapticFeedbackConstants.VIRTUAL_KEY)
+        options.onClick?.invoke() ?: Atalia.open(context)
+    }
+
+    /** Halo e leve encolhida enquanto o dedo está no botão. */
+    private fun press(down: Boolean) {
+        if (down) {
+            circle.animate().scaleX(0.92f).scaleY(0.92f).setDuration(90).start()
+            halo.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(160).start()
+        } else {
+            circle.animate().scaleX(1f).scaleY(1f).setDuration(260).setInterpolator(OvershootInterpolator(2.2f)).start()
+            halo.animate().alpha(0f).scaleX(0.7f).scaleY(0.7f).setDuration(220).start()
+        }
+    }
+
+    /** Deslocamento com resistência: cresce cada vez menos até [RUBBER_MAX_DP]. */
+    private fun rubber(distance: Float): Float {
+        val max = dp(RUBBER_MAX_DP).toFloat()
+        return sign(distance) * max * (1f - exp(-abs(distance) / (max * 2.2f)))
+    }
+
+    private fun springBack(tx: Float, ty: Float, quick: Boolean = false) {
+        animate().translationX(tx).translationY(ty).setDuration(if (quick) 120 else 380)
+            .setInterpolator(if (quick) AccelerateInterpolator() else OvershootInterpolator(2.4f)).start()
+    }
+
+    /** Solta o arrasto livre: gruda na lateral mais próxima e fica na altura escolhida, sem sair da tela. */
+    private fun settleAfterDrag() {
+        val container = parent as? View ?: return
+        val centerX = left + translationX + width / 2f
+        draggedSide = if (centerX < container.width / 2f) AtaliaLauncherOptions.Side.START else AtaliaLauncherOptions.Side.END
+        val minTy = -(top - systemBars.top).toFloat()
+        translationY = translationY.coerceIn(minTy, 0f)
+        render()
+    }
+
+    private fun haptic(feedback: Int) {
+        performHapticFeedback(feedback)
     }
 
     // Posição dada pelo SDK (Atalia.showLauncher)
@@ -319,69 +629,20 @@ class AtaliaLauncherView @JvmOverloads constructor(
         layoutParams = lp
     }
 
-    @SuppressLint("ClickableViewAccessibility")
-    private fun setupDrag() {
-        val slop = ViewConfiguration.get(context).scaledTouchSlop
-        var downX = 0f
-        var downY = 0f
-        var startTx = 0f
-        var startTy = 0f
-        var dragging = false
-        body.setOnTouchListener { _, event ->
-            if (!options.draggable || !positionedBySdk) return@setOnTouchListener false
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    downX = event.rawX
-                    downY = event.rawY
-                    startTx = translationX
-                    startTy = translationY
-                    dragging = false
-                    false
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    val dx = event.rawX - downX
-                    val dy = event.rawY - downY
-                    if (!dragging && (abs(dx) > slop || abs(dy) > slop)) {
-                        dragging = true
-                        body.isPressed = false
-                        parent?.requestDisallowInterceptTouchEvent(true)
-                    }
-                    if (dragging) {
-                        translationX = startTx + dx
-                        translationY = startTy + dy
-                    }
-                    dragging
-                }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    if (!dragging) return@setOnTouchListener false
-                    dragging = false
-                    settleAfterDrag()
-                    true
-                }
-                else -> dragging
-            }
-        }
-    }
-
-    /** Solta: gruda na lateral mais próxima e fica na altura escolhida, sem sair da tela. */
-    private fun settleAfterDrag() {
-        val container = parent as? View ?: return
-        val centerX = left + translationX + width / 2f
-        draggedSide = if (centerX < container.width / 2f) AtaliaLauncherOptions.Side.START else AtaliaLauncherOptions.Side.END
-        val minTy = -(top - systemBars.top).toFloat()
-        translationY = translationY.coerceIn(minTy, 0f)
-        render(animate = false)
-    }
-
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).roundToInt()
 
     private fun parseColor(hex: String?): Int? = hex?.let { runCatching { Color.parseColor(it) }.getOrNull() }
 
     private companion object {
-        const val HEIGHT_DP = 56
+        const val CIRCLE_DP = 56
         const val INSET_DP = 12
-        const val EDGE_WIDTH_DP = 48
+        const val HALO_DP = 9
+        const val TAB_WIDTH_DP = 48
         const val EDGE_HIDDEN_DP = 16
+        const val RUBBER_MAX_DP = 26
+        const val DOCK_DISTANCE_DP = 32
+        const val DOCK_VELOCITY_DP = 600
+        const val UNDOCK_DISTANCE_DP = 16
         val DEFAULT_COLOR = Color.parseColor("#1036F2")
     }
 }

@@ -1,7 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Tema da plataforma: o SDK não traz AppCompat nem Material Components para o app. -->
+    <!--
+      Tema da plataforma: o SDK não traz AppCompat nem Material Components para o app.
+      Janela translúcida e sem animação do sistema: a tela do chat desenha a própria folha (o app
+      continua visível atrás, escurecido) e anima a entrada e a saída.
+    -->
     <style name="Theme.AtaliaChat" parent="android:Theme.Material.Light.NoActionBar">
-        <item name="android:windowBackground">@android:color/white</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:windowContentOverlay">@null</item>
     </style>
 </resources>

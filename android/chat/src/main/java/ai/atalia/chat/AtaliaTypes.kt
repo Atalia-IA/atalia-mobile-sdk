@@ -15,6 +15,7 @@ import android.net.Uri
  * @property notificationIcon Ícone pequeno (monocromático) das notificações do chat. Sem ele, o
  *   balão de conversa da Atalia. O ícone do app não serve: colorido ou adaptativo, vira um quadrado
  *   branco ou é recusado pelo sistema.
+ * @property presentation Como [Atalia.open] mostra o chat: folha que sobe sobre o app (padrão) ou tela cheia.
  */
 data class AtaliaOptions @JvmOverloads constructor(
     val baseUrl: String = DEFAULT_BASE_URL,
@@ -23,7 +24,16 @@ data class AtaliaOptions @JvmOverloads constructor(
     val debug: Boolean = false,
     val urlHandler: ((Context, Uri) -> Boolean)? = null,
     @androidx.annotation.DrawableRes val notificationIcon: Int? = null,
+    val presentation: Presentation = Presentation.SHEET,
 ) {
+    enum class Presentation {
+        /** Folha que sobe sobre o app, com cantos arredondados e o fundo escurecido. Arrastar a alça fecha. */
+        SHEET,
+
+        /** O chat ocupa a tela inteira. */
+        FULL_SCREEN,
+    }
+
     companion object {
         const val DEFAULT_BASE_URL = "https://chat.atalia.ai"
     }

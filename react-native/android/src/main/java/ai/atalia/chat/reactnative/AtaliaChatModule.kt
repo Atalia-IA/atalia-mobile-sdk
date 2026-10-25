@@ -21,6 +21,7 @@ class ConfigureRecord : Record {
     @Field val baseUrl: String? = null
     @Field val customDomain: Boolean? = null
     @Field val closeButton: Boolean? = null
+    @Field val presentationStyle: String? = null
     @Field val debug: Boolean? = null
 }
 
@@ -30,10 +31,13 @@ class LauncherRecord : Record {
     @Field val horizontalMargin: Double? = null
     @Field val bottomMargin: Double? = null
     @Field val text: String? = null
+    @Field val subtitle: String? = null
     @Field val color: String? = null
     @Field val collapse: String? = null
     @Field val collapseAfter: Double? = null
     @Field val draggable: Boolean? = null
+    @Field val dockable: Boolean? = null
+    @Field val preloadChat: Boolean? = null
 }
 
 /** Ponte entre o JavaScript e o SDK Android (`ai.atalia:chat`). */
@@ -71,6 +75,11 @@ class AtaliaChatModule : Module() {
                     closeButton = record.closeButton ?: true,
                     debug = record.debug ?: false,
                     notificationIcon = AtaliaChatConfig.notificationIcon(AtaliaChatConfig.metaData(app)),
+                    presentation = if (record.presentationStyle == "fullScreen") {
+                        AtaliaOptions.Presentation.FULL_SCREEN
+                    } else {
+                        AtaliaOptions.Presentation.SHEET
+                    },
                 ),
             )
         }
@@ -171,6 +180,7 @@ class AtaliaChatModule : Module() {
             horizontalMarginDp = record.horizontalMargin?.toInt() ?: defaults.horizontalMarginDp,
             bottomMarginDp = record.bottomMargin?.toInt() ?: defaults.bottomMarginDp,
             text = record.text,
+            subtitle = record.subtitle,
             color = record.color?.let { runCatching { Color.parseColor(it) }.getOrNull() },
             collapse = when (record.collapse) {
                 "edge" -> AtaliaLauncherOptions.Collapse.EDGE
@@ -179,6 +189,8 @@ class AtaliaChatModule : Module() {
             },
             collapseAfterMs = record.collapseAfter?.toLong() ?: defaults.collapseAfterMs,
             draggable = record.draggable ?: false,
+            dockable = record.dockable ?: defaults.dockable,
+            preloadChat = record.preloadChat ?: defaults.preloadChat,
         )
     }
 

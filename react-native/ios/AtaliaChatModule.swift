@@ -24,10 +24,13 @@ struct LauncherRecord: Record {
     @Field var horizontalMargin: Double?
     @Field var bottomMargin: Double?
     @Field var text: String?
+    @Field var subtitle: String?
     @Field var color: String?
     @Field var collapse: String?
     @Field var collapseAfter: Double?
     @Field var draggable: Bool?
+    @Field var dockable: Bool?
+    @Field var preloadChat: Bool?
 }
 
 /// Ponte entre o JavaScript e o SDK iOS (o mesmo do Swift Package Manager, compilado neste pod).
@@ -62,7 +65,7 @@ public class AtaliaChatModule: Module {
             if let base = record.baseUrl, let url = URL(string: base) { options.baseURL = url }
             if let customDomain = record.customDomain { options.customDomain = customDomain }
             if let closeButton = record.closeButton { options.closeButton = closeButton }
-            if record.presentationStyle == "pageSheet" { options.presentationStyle = .pageSheet }
+            if record.presentationStyle == "fullScreen" { options.presentationStyle = .fullScreen }
             if let debug = record.debug { options.debug = debug }
             if let appBadge = record.appBadge { options.appBadge = appBadge }
             Task { @MainActor in Atalia.configure(channelToken: channelToken, options: options) }
@@ -167,6 +170,7 @@ public class AtaliaChatModule: Module {
         if let margin = record.horizontalMargin { options.horizontalPadding = CGFloat(margin) }
         if let margin = record.bottomMargin { options.bottomPadding = CGFloat(margin) }
         options.text = record.text
+        options.subtitle = record.subtitle
         options.color = UIColor(ataliaHex: record.color)
         switch record.collapse {
         case "edge": options.collapse = .edge
@@ -175,6 +179,8 @@ public class AtaliaChatModule: Module {
         }
         if let after = record.collapseAfter { options.collapseAfter = after / 1000 }
         options.draggable = record.draggable ?? false
+        if let dockable = record.dockable { options.dockable = dockable }
+        if let preloadChat = record.preloadChat { options.preloadChat = preloadChat }
         return options
     }
 

@@ -26,6 +26,7 @@ class ChatUrlTest {
                 session = expected.opt("session") as? String,
                 conversationId = (expected.opt("conversationId") as? Number)?.toLong(),
                 closeButton = expected.optBoolean("closeButton", true),
+                background = expected.optBoolean("background", false),
             )
             val url = ChatUrl.build(item.getString("baseUrl"), item.getString("channelToken"), item.getBoolean("customDomain"), fragment)
             val prefix = item.getString("expectedPrefix")

@@ -13,7 +13,12 @@ module.exports = {
       {
         channelToken: process.env.ATALIA_CHANNEL_TOKEN,
         baseUrl: process.env.ATALIA_BASE_URL,
+        notificationIcon: './assets/notification-icon.png',
       },
     ],
+    // ATALIA_IOS_FRAMEWORKS=dynamic: como fica o app com o @react-native-firebase 27 (o CI compila os dois jeitos).
+    ...(process.env.ATALIA_IOS_FRAMEWORKS
+      ? [['expo-build-properties', { ios: { useFrameworks: process.env.ATALIA_IOS_FRAMEWORKS } }]]
+      : []),
   ],
 };

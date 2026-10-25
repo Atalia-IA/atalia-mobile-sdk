@@ -112,11 +112,13 @@ De Java, use as versões com callback: `Atalia.identify(jwt, callback)`, `Atalia
 
 Opcional: o SDK não desenha nada por cima do app sem você pedir. Quem prefere um botão próprio chama `Atalia.present()` (iOS) / `Atalia.open(context)` (Android).
 
-A aparência vem do painel da Atalia, a mesma do botão do site: cor, texto ("Fale conosco") e lado da tela. Mudou no painel, muda no app sem atualizar nada. O botão:
+A aparência vem do painel da Atalia, a mesma do botão do site: cor, texto ("Fale conosco") e lado da tela, com o nome do atendimento como subtítulo. Mudou no painel, muda no app sem atualizar nada. O botão:
 
-- abre como pílula com o texto e recolhe em círculo depois de 5 segundos;
-- volta a abrir quando chega mensagem nova e mostra as não lidas;
-- some enquanto o chat está aberto.
+- entra com o círculo colorido e abre uma pílula com o título e o nome do atendimento; recolhe em círculo depois de 5 segundos;
+- puxado, estica como um elástico; puxado até a borda, se esconde numa aba, e tocar ou puxar a aba o traz de volta;
+- volta a abrir, com um pulo, quando chega mensagem nova e mostra as não lidas;
+- some enquanto o chat está aberto;
+- carrega o chat escondido enquanto está na tela: o toque abre a folha com o chat pronto. Escondido, o chat não conecta nem marca lidas, e o push segue saindo.
 
 O estilo círculo/pílula do botão do site não vale no app: aqui quem decide é a opção `collapse`.
 
@@ -143,11 +145,14 @@ No Android, para posicionar você mesmo, use `AtaliaLauncherView` como qualquer 
 | `side` | o lado do painel | `.leading`/`.trailing` (iOS), `START`/`END` (Android) |
 | `horizontalPadding` / `horizontalMarginDp` | 16 | Distância da lateral |
 | `bottomPadding` / `bottomMarginDp` | 16 | Distância do fim da tela; aumente para ficar acima de uma barra de abas |
-| `text` | o do painel | Texto do botão aberto |
-| `color` | a do painel | Cor do botão |
-| `collapse` | círculo | `circle`: só o ícone; `edge`: aba encostada na lateral, que o toque mostra de novo; `never`: sempre com o texto |
-| `collapseAfter` / `collapseAfterMs` | 5 s | Tempo com o texto antes de recolher |
-| `draggable` | `false` | O usuário arrasta o botão; ao soltar, ele gruda na lateral mais próxima. No Android, só com `showLauncher` |
+| `text` | o do painel | Título do botão aberto |
+| `subtitle` | o nome do atendimento | Linha de baixo do botão aberto; vazio tira |
+| `color` | a do painel | Cor do círculo e da aba |
+| `collapse` | círculo | `circle`: só o círculo; `edge`: aba encostada na lateral, que o toque mostra de novo; `never`: sempre aberto |
+| `collapseAfter` / `collapseAfterMs` | 5 s | Tempo aberto antes de recolher |
+| `draggable` | `false` | O usuário arrasta o botão para onde quiser; ao soltar, ele gruda na lateral mais próxima. No Android, só com `showLauncher` |
+| `dockable` | `true` | Puxar até a borda esconde o botão numa aba |
+| `preloadChat` | `true` | Carrega o chat escondido enquanto o botão está na tela |
 | `onTap` / `onClick` | abre o chat | Troca a ação do toque |
 
 ## Identificar o usuário logado
@@ -335,7 +340,7 @@ Passadas no `configure` (`AtaliaOptions`):
 | `baseURL` (iOS) / `baseUrl` (Android) | `https://chat.atalia.ai` | Outro ambiente, ou o domínio próprio do canal |
 | `customDomain` | `false` | `true` quando a origem é o domínio próprio vinculado ao canal |
 | `closeButton` | `true` | Desligue quando o chat for uma aba do app |
-| `presentationStyle` (só iOS) | `.fullScreen` | `.pageSheet` abre como folha |
+| `presentationStyle` (iOS) / `presentation` (Android) | folha (`.pageSheet` / `SHEET`) | O chat sobe numa folha sobre o app; `.fullScreen` / `FULL_SCREEN` abre em tela cheia |
 | `urlHandler` (só Android) | nenhum | Decide como abrir os links tocados no chat. No iOS: `Atalia.urlHandler` |
 | `notificationIcon` (só Android) | balão da Atalia | Ícone pequeno (monocromático) da notificação mostrada com o app aberto |
 | `appBadge` (só iOS) | `true` | Com o push ligado, o número no ícone do app acompanha as não lidas. Desligue se o app tem contador próprio: o push da Atalia também deixa de mexer nele |

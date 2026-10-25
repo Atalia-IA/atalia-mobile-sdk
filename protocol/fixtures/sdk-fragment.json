@@ -29,6 +29,21 @@
         "closeButton": false
       },
       "expectedPrefix": "https://chat.cliente.com.br/?sdk=1#sdk="
+    },
+    {
+      "name": "chat pré-carregado pelo botão flutuante (nasce em segundo plano)",
+      "baseUrl": "https://chat.atalia.ai",
+      "channelToken": "wct_abc123",
+      "customDomain": false,
+      "fragment": {
+        "protocol": 1,
+        "platform": "android",
+        "sdkVersion": "0.3.0",
+        "session": "sdk-session-123456",
+        "closeButton": true,
+        "background": true
+      },
+      "expectedPrefix": "https://chat.atalia.ai/chat/wct_abc123?sdk=1#sdk="
     }
   ]
 }

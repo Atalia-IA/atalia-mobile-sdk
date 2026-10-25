@@ -19,6 +19,8 @@ internal data class SdkFragment(
     val identity: String? = null,
     val conversationId: Long? = null,
     val closeButton: Boolean = true,
+    /** Chat pré-carregado escondido: nasce em segundo plano (sem socket, sem presença, sem marcar lidas). */
+    val background: Boolean = false,
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("protocol", protocol)
@@ -29,6 +31,7 @@ internal data class SdkFragment(
         session?.let { put("session", it) }
         identity?.let { put("identity", it) }
         conversationId?.let { put("conversationId", it) }
+        if (background) put("background", true)
     }
 
     fun encoded(): String = Base64Url.encode(toJson().toString().toByteArray(Charsets.UTF_8))
