@@ -13,6 +13,10 @@ public final class AtaliaState: ObservableObject {
     @Published public internal(set) var unreadCount = 0
     /// A sessão atual pertence a um usuário identificado por `Atalia.identify(jwt:)`.
     @Published public internal(set) var isIdentified = false
+    /// A tela do chat está aberta.
+    @Published public internal(set) var isChatOpen = false
+    /// Aparência do canal no painel. Nil até o `Atalia.configure`.
+    @Published var branding: ChannelBranding?
 
     nonisolated init() {}
 }

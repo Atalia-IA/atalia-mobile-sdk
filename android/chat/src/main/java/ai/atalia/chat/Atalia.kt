@@ -3,6 +3,7 @@ package ai.atalia.chat
 import ai.atalia.chat.internal.AtaliaCore
 import ai.atalia.chat.internal.AtaliaNotifications
 import ai.atalia.chat.internal.AtaliaStateHolder
+import ai.atalia.chat.internal.ChannelBranding
 import ai.atalia.chat.internal.HttpApiClient
 import ai.atalia.chat.internal.KeystoreSessionStorage
 import ai.atalia.chat.internal.PushPayload
@@ -11,6 +12,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
+import android.view.ViewGroup
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
@@ -55,8 +57,15 @@ object Atalia {
     @JvmStatic
     val isIdentified: StateFlow<Boolean> = state.identified.asStateFlow()
 
+    /** A tela do chat está aberta. */
+    @JvmStatic
+    val isChatOpen: StateFlow<Boolean> = state.chatOpen.asStateFlow()
+
     @JvmStatic
     val events: SharedFlow<AtaliaEvent> = state.events.asSharedFlow()
+
+    /** Aparência do canal no painel, para o botão flutuante. */
+    internal val brandingFlow: StateFlow<ChannelBranding?> = state.branding.asStateFlow()
 
     /**
      * Chame uma vez, no `Application.onCreate`. O token do canal fica em
@@ -196,6 +205,35 @@ object Atalia {
         if (payload.conversationId != null) openConversation(activity, payload.conversationId) else open(activity)
         return true
     }
+
+    // Botão flutuante
+
+    /**
+     * Mostra o botão flutuante que abre o chat por cima desta tela (View ou Compose). A aparência
+     * vem do painel; posição e comportamento, de [options]. Chamar de novo só troca as opções.
+     */
+    @JvmStatic
+    @JvmOverloads
+    fun showLauncher(activity: Activity, options: AtaliaLauncherOptions = AtaliaLauncherOptions()): AtaliaLauncherView {
+        val content = activity.findViewById<ViewGroup>(android.R.id.content)
+        content.findViewWithTag<AtaliaLauncherView>(LAUNCHER_TAG)?.let { existing ->
+            existing.options = options
+            return existing
+        }
+        val launcher = AtaliaLauncherView(activity, options = options)
+        launcher.tag = LAUNCHER_TAG
+        launcher.positionOnScreen()
+        content.addView(launcher)
+        return launcher
+    }
+
+    /** Tira o botão flutuante desta tela. */
+    @JvmStatic
+    fun hideLauncher(activity: Activity) {
+        activity.findViewById<ViewGroup>(android.R.id.content)?.findViewWithTag<AtaliaLauncherView>(LAUNCHER_TAG)?.remove()
+    }
+
+    private const val LAUNCHER_TAG = "ai.atalia.chat.launcher"
 
     @JvmStatic
     fun addListener(listener: AtaliaListener) {

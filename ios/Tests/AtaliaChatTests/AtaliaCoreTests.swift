@@ -231,9 +231,31 @@ final class AtaliaCoreTests: XCTestCase {
         XCTAssertEqual(core.primaryColorHex, "#112233")
     }
 
+    func testLauncherBrandingComesFromThePanel() {
+        let branding = ChannelBranding(json: [
+            "primary_color": "#112233",
+            "launcher_color": "#445566",
+            "launcher_text": "  ",
+            "launcher_position": "bottom-left",
+        ])
+        XCTAssertEqual(branding.buttonColor, "#445566", "cor própria do botão vence a do canal")
+        XCTAssertEqual(branding.buttonText, "Fale conosco", "texto em branco cai no padrão do site")
+        XCTAssertTrue(branding.buttonOnLeading)
+        XCTAssertEqual(ChannelBranding(json: ["primary_color": "#112233"]).buttonColor, "#112233")
+    }
+
+    func testChatOpenStateFollowsTheScreen() {
+        XCTAssertFalse(core.state.isChatOpen)
+        let chat = FakeChat()
+        core.activeChat = chat
+        XCTAssertTrue(core.state.isChatOpen, "o botão flutuante some com o chat aberto")
+        core.activeChat = nil
+        XCTAssertFalse(core.state.isChatOpen)
+    }
+
     func testCachedColorFirstThenOpenChatFollowsTheChannel() async {
         let store = MemorySessionStore()
-        store.savePrimaryColor("#000000")
+        store.saveBranding(ChannelBranding(primaryColor: "#000000"))
         let core = makeCore(store: store)
         XCTAssertEqual(core.primaryColorHex, "#000000", "a tela aberta logo ao iniciar já nasce com a cor salva")
         let chat = FakeChat()
@@ -242,7 +264,7 @@ final class AtaliaCoreTests: XCTestCase {
         await settle()
 
         XCTAssertEqual(core.primaryColorHex, "#112233")
-        XCTAssertEqual(store.loadPrimaryColor(), "#112233")
+        XCTAssertEqual(store.loadBranding()?.primaryColor, "#112233")
         XCTAssertEqual(chat.colorChanges, 1, "o topo da tela aberta troca de cor")
     }
 }

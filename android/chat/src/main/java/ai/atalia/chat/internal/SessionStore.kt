@@ -35,10 +35,10 @@ internal interface SessionStorage {
 
     fun clear()
 
-    /** Cor do cabeçalho do canal, para a barra de status combinar antes de a página carregar. */
-    fun loadPrimaryColor(): String? = null
+    /** Aparência do canal da última consulta: topo do chat e botão flutuante não piscam. */
+    fun loadBranding(): ChannelBranding? = null
 
-    fun savePrimaryColor(color: String) {}
+    fun saveBranding(branding: ChannelBranding) {}
 
     /**
      * Token do push do aparelho. Fica separado da sessão: o logout apaga a sessão, mas o aparelho
@@ -78,10 +78,13 @@ internal class KeystoreSessionStorage(context: Context, baseUrl: String, channel
         prefs.edit().remove("session:$key").apply()
     }
 
-    override fun loadPrimaryColor(): String? = prefs.getString("color:$key", null)
+    override fun loadBranding(): ChannelBranding? {
+        val stored = prefs.getString("branding:$key", null) ?: return null
+        return runCatching { ChannelBranding.fromJson(JSONObject(stored)) }.getOrNull()
+    }
 
-    override fun savePrimaryColor(color: String) {
-        prefs.edit().putString("color:$key", color).apply()
+    override fun saveBranding(branding: ChannelBranding) {
+        prefs.edit().putString("branding:$key", branding.toJson()).apply()
     }
 
     // O token do push não abre conversa nenhuma (só serve para o Firebase entregar no aparelho),
@@ -139,7 +142,7 @@ internal class KeystoreSessionStorage(context: Context, baseUrl: String, channel
 
 /** Usado nos testes. */
 internal class MemorySessionStorage(private var session: StoredSession? = null) : SessionStorage {
-    private var color: String? = null
+    private var branding: ChannelBranding? = null
     private var pushToken: String? = null
 
     override fun loadPushToken() = pushToken
@@ -162,9 +165,9 @@ internal class MemorySessionStorage(private var session: StoredSession? = null) 
         session = null
     }
 
-    override fun loadPrimaryColor() = color
+    override fun loadBranding() = branding
 
-    override fun savePrimaryColor(color: String) {
-        this.color = color
+    override fun saveBranding(branding: ChannelBranding) {
+        this.branding = branding
     }
 }

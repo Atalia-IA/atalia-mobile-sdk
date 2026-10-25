@@ -32,10 +32,13 @@ final class AtaliaCore {
     weak var activeChat: ChatBridgeTarget? {
         didSet {
             if self === AtaliaCore.shared { ChatPresence.shared.set(activeChat) }
+            if state.isChatOpen != (activeChat != nil) { state.isChatOpen = activeChat != nil }
         }
     }
+    /// Aparência do canal (cor do cabeçalho, botão flutuante), salva da última consulta.
+    private(set) var branding = ChannelBranding()
     /// Cor primária do canal (cabeçalho do chat), para a barra de status combinar antes de a página carregar.
-    private(set) var primaryColorHex: String?
+    var primaryColorHex: String? { branding.primaryColor }
 
     private var listeners: [AtaliaListenerToken: (AtaliaEvent) -> Void] = [:]
     private var waiters: [EventWaiter] = []
@@ -73,9 +76,10 @@ final class AtaliaCore {
             pendingPushToken = nil
         }
         state.isIdentified = store.load()?.identified ?? false
-        // Cor da última abertura: a tela aberta pelo toque numa notificação, logo ao iniciar o app,
-        // já nasce com o topo certo, antes de a consulta ao canal voltar.
-        primaryColorHex = store.loadPrimaryColor()
+        // Aparência da última abertura: a tela aberta pelo toque numa notificação, logo ao iniciar o
+        // app, já nasce com o topo certo, e o botão flutuante não troca de lado nem de cor.
+        branding = store.loadBranding() ?? ChannelBranding()
+        state.branding = branding
         observeForeground()
         Task { [weak self] in
             await self?.loadChannelBranding()
@@ -398,13 +402,15 @@ final class AtaliaCore {
         guard let config = configuration,
               let response = try? await config.api.channelConfig(),
               response.isSuccess,
-              let branding = response.json?["branding"] as? [String: Any],
-              let color = branding["primary_color"] as? String,
-              color != primaryColorHex
+              let json = response.json?["branding"] as? [String: Any]
         else { return }
-        primaryColorHex = color
-        config.store.savePrimaryColor(color)
-        activeChat?.primaryColorDidChange()
+        let fresh = ChannelBranding(json: json)
+        guard fresh != branding else { return }
+        let colorChanged = fresh.primaryColor != branding.primaryColor
+        branding = fresh
+        state.branding = fresh
+        config.store.saveBranding(fresh)
+        if colorChanged { activeChat?.primaryColorDidChange() }
     }
 
     private func observeForeground() {

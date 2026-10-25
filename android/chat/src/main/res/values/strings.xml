@@ -7,4 +7,9 @@
     <string name="atalia_chat_no_app_for_link">Nenhum app para abrir este link</string>
     <string name="atalia_chat_notification_channel">Mensagens do atendimento</string>
     <string name="atalia_chat_notification_fallback_title">Nova mensagem</string>
+    <string name="atalia_launcher_show">Mostrar %1$s</string>
+    <plurals name="atalia_launcher_unread">
+        <item quantity="one">%1$s, %2$d mensagem não lida</item>
+        <item quantity="other">%1$s, %2$d mensagens não lidas</item>
+    </plurals>
 </resources>

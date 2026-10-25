@@ -337,7 +337,7 @@ extension AtaliaChatViewController: ChatBridgeTarget {
     }
 
     private func applyPrimaryColor() {
-        view.backgroundColor = UIColor(ataliaHex: AtaliaCore.shared.primaryColorHex) ?? UIColor(red: 0.063, green: 0.212, blue: 0.949, alpha: 1)
+        view.backgroundColor = UIColor(ataliaHex: AtaliaCore.shared.primaryColorHex) ?? .ataliaDefaultPrimary
     }
 
     func sendCommand(_ type: String, payload: [String: Any]?) {
@@ -493,6 +493,9 @@ private final class PagePin: NSObject, UIScrollViewDelegate {
 }
 
 extension UIColor {
+    /// Azul da Atalia, enquanto a cor do canal não chegou.
+    static let ataliaDefaultPrimary = UIColor(red: 0.063, green: 0.212, blue: 0.949, alpha: 1)
+
     /// `#RRGGBB` → UIColor. Nil para qualquer outro formato.
     convenience init?(ataliaHex hex: String?) {
         guard var value = hex?.trimmingCharacters(in: .whitespaces), value.hasPrefix("#"), value.count == 7 else { return nil }

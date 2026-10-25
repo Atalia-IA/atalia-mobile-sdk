@@ -2,6 +2,7 @@ package ai.atalia.chat.sample
 
 import ai.atalia.chat.Atalia
 import ai.atalia.chat.AtaliaException
+import ai.atalia.chat.AtaliaLauncherOptions
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -23,6 +24,9 @@ import kotlinx.coroutines.launch
 
 /** Tela mínima: abrir o chat, identificar com um JWT de teste, sair e ver as não lidas. */
 class MainActivity : ComponentActivity() {
+    private var collapse = AtaliaLauncherOptions.Collapse.CIRCLE
+    private var draggable = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val padding = (24 * resources.displayMetrics.density).toInt()
@@ -74,8 +78,28 @@ class MainActivity : ComponentActivity() {
                     Atalia.handleNotification(this@MainActivity, data, "Ana", "Seu pedido saiu para entrega")
                 }
             })
+            // Botão flutuante: troque as opções para ver cada forma.
+            addView(Button(context).apply {
+                text = collapseLabel()
+                setOnClickListener {
+                    val modes = AtaliaLauncherOptions.Collapse.entries
+                    collapse = modes[(collapse.ordinal + 1) % modes.size]
+                    text = collapseLabel()
+                    showLauncher()
+                }
+            })
+            addView(Button(context).apply {
+                text = dragLabel()
+                setOnClickListener {
+                    draggable = !draggable
+                    text = dragLabel()
+                    showLauncher()
+                }
+            })
         }
         setContentView(layout)
+        // Botão flutuante com a aparência do painel; abre como pílula e recolhe em círculo.
+        showLauncher()
         requestNotificationPermission()
         // Toque na notificação mostrada pelo sistema com o app em segundo plano.
         Atalia.handleNotificationTap(this, intent)
@@ -87,6 +111,18 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    private fun showLauncher() {
+        Atalia.showLauncher(this, AtaliaLauncherOptions(collapse = collapse, draggable = draggable))
+    }
+
+    private fun collapseLabel() = when (collapse) {
+        AtaliaLauncherOptions.Collapse.CIRCLE -> "Botão flutuante: recolhe em círculo"
+        AtaliaLauncherOptions.Collapse.EDGE -> "Botão flutuante: recolhe na borda"
+        AtaliaLauncherOptions.Collapse.NEVER -> "Botão flutuante: sempre com o nome"
+    }
+
+    private fun dragLabel() = if (draggable) "Arrastar o botão: ligado" else "Arrastar o botão: desligado"
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)

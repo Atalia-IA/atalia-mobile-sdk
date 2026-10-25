@@ -31,6 +31,9 @@ internal interface ChatBridgeTarget {
 internal class AtaliaStateHolder {
     val unread = MutableStateFlow(0)
     val identified = MutableStateFlow(false)
+    val chatOpen = MutableStateFlow(false)
+    /** Aparência do canal no painel. Nula até o `configure`. */
+    val branding = MutableStateFlow<ChannelBranding?>(null)
     val events = MutableSharedFlow<AtaliaEvent>(extraBufferCapacity = 64)
     val listeners = CopyOnWriteArraySet<AtaliaListener>()
 }
@@ -66,13 +69,19 @@ internal class AtaliaCore(
         get() = activeChatRef?.get()
         set(value) {
             activeChatRef = value?.let { WeakReference(it) }
+            state.chatOpen.value = value != null
         }
 
+    /** Aparência do canal (cor do cabeçalho, botão flutuante), salva da última consulta. */
     @Volatile
-    var primaryColor: String? = store.loadPrimaryColor()
+    var branding: ChannelBranding = store.loadBranding() ?: ChannelBranding()
         private set
 
+    /** Cor do cabeçalho do canal, para a barra de status combinar antes de a página carregar. */
+    val primaryColor: String? get() = branding.primaryColor
+
     init {
+        state.branding.value = branding
         state.identified.value = store.load()?.identified ?: false
     }
 
@@ -219,11 +228,16 @@ internal class AtaliaCore(
 
     suspend fun loadBranding() {
         val response = runCatching { api.channelConfig() }.getOrNull() ?: return
-        val color = response.json?.optJSONObject("branding")?.opt("primary_color") as? String ?: return
-        if (!response.isSuccess || color == primaryColor) return
-        primaryColor = color
-        store.savePrimaryColor(color)
-        dispatchToMain { activeChat?.primaryColorChanged(color) }
+        if (!response.isSuccess) return
+        val json = response.json?.optJSONObject("branding") ?: return
+        val fresh = ChannelBranding.fromJson(json)
+        if (fresh == branding) return
+        val colorChanged = fresh.primaryColor != branding.primaryColor
+        branding = fresh
+        state.branding.value = fresh
+        store.saveBranding(fresh)
+        val color = fresh.primaryColor
+        if (colorChanged && color != null) dispatchToMain { activeChat?.primaryColorChanged(color) }
     }
 
     // Bridge

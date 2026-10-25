@@ -24,6 +24,7 @@ A tela do chat é o próprio webchat da Atalia num WebView, então todo recurso 
 - **Links:** abre fora do app.
 - **Não lidas:** conta as mensagens não lidas sem abrir o chat.
 - **Push:** registra o aparelho e abre a conversa certa no toque da notificação.
+- **Botão flutuante (opcional):** com a aparência do botão do site, configurada no painel.
 
 ## iOS
 
@@ -103,6 +104,48 @@ lifecycleScope.launch {
 A foto pela câmera funciona sem permissão nenhuma. Se o seu app já declara `CAMERA` por outro motivo, o SDK pede a permissão na hora de usar.
 
 De Java, use as versões com callback: `Atalia.identify(jwt, callback)`, `Atalia.logout(callback)` e `Atalia.refreshUnread(callback)`.
+
+## Botão flutuante
+
+Opcional: o SDK não desenha nada por cima do app sem você pedir. Quem prefere um botão próprio chama `Atalia.present()` / `Atalia.open()`.
+
+A aparência vem do painel da Atalia, a mesma do botão do site: cor, texto ("Fale conosco") e lado da tela. Mudou no painel, muda no app sem atualizar nada. O botão:
+
+- abre como pílula com o texto e recolhe em círculo depois de 5 segundos;
+- volta a abrir quando chega mensagem nova e mostra as não lidas;
+- some enquanto o chat está aberto.
+
+O estilo círculo/pílula do botão do site não vale no app: aqui quem decide é a opção `collapse`.
+
+```swift title="SwiftUI"
+TabView { ... }
+    .ataliaLauncher(AtaliaLauncherOptions(bottomPadding: 56)) // acima da barra de abas
+```
+
+Aplique numa view que ocupe a tela inteira (`TabView`, `NavigationStack` ou `.frame(maxWidth: .infinity, maxHeight: .infinity)`): o botão vai para o canto dela.
+
+```swift title="UIKit"
+AtaliaLauncherView.attach(to: view)          // nesta tela
+AtaliaLauncherView.attach(to: view.window!)  // em todas as telas
+```
+
+```kotlin title="Android (View e Compose)"
+Atalia.showLauncher(activity)  // Atalia.hideLauncher(activity) para tirar
+```
+
+No Android, para posicionar você mesmo, use `AtaliaLauncherView` como qualquer view (no Compose, dentro de um `AndroidView`).
+
+| Opção | Padrão | Para quê |
+|---|---|---|
+| `side` | o lado do painel | `.leading`/`.trailing` (iOS), `START`/`END` (Android) |
+| `horizontalPadding` / `horizontalMarginDp` | 16 | Distância da lateral |
+| `bottomPadding` / `bottomMarginDp` | 16 | Distância do fim da tela; aumente para ficar acima de uma barra de abas |
+| `text` | o do painel | Texto do botão aberto |
+| `color` | a do painel | Cor do botão |
+| `collapse` | círculo | `circle`: só o ícone; `edge`: aba encostada na lateral, que o toque mostra de novo; `never`: sempre com o texto |
+| `collapseAfter` / `collapseAfterMs` | 5 s | Tempo com o texto antes de recolher |
+| `draggable` | `false` | O usuário arrasta o botão; ao soltar, ele gruda na lateral mais próxima. No Android, só com `showLauncher` |
+| `onTap` / `onClick` | abre o chat | Troca a ação do toque |
 
 ## Identificar o usuário logado
 

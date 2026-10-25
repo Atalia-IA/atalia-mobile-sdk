@@ -5,6 +5,7 @@ import ai.atalia.chat.internal.AtaliaApi
 import ai.atalia.chat.internal.AtaliaCore
 import ai.atalia.chat.internal.AtaliaStateHolder
 import ai.atalia.chat.internal.BridgeMessage
+import ai.atalia.chat.internal.ChannelBranding
 import ai.atalia.chat.internal.ChatBridgeTarget
 import ai.atalia.chat.internal.MemorySessionStorage
 import ai.atalia.chat.internal.StoredSession
@@ -197,6 +198,38 @@ class AtaliaCoreTest {
     fun brandingColorIsCached() = runTest {
         core.loadBranding()
         assertEquals("#112233", core.primaryColor)
-        assertEquals("#112233", store.loadPrimaryColor())
+        assertEquals("#112233", store.loadBranding()?.primaryColor)
+        assertEquals("#112233", state.branding.value?.primaryColor)
+    }
+
+    @Test
+    fun launcherBrandingComesFromThePanel() {
+        val branding = ChannelBranding.fromJson(
+            JSONObject()
+                .put("primary_color", "#112233")
+                .put("launcher_color", "#445566")
+                .put("launcher_text", "  ")
+                .put("launcher_position", "bottom-left"),
+        )
+        assertEquals("cor própria do botão vence a do canal", "#445566", branding.buttonColor)
+        assertEquals("texto em branco cai no padrão do site", "Fale conosco", branding.buttonText)
+        assertTrue(branding.buttonOnStart)
+        assertEquals(branding, ChannelBranding.fromJson(JSONObject(branding.toJson())))
+    }
+
+    @Test
+    fun cachedBrandingIsUsedBeforeTheChannelAnswers() {
+        val cached = MemorySessionStorage().apply { saveBranding(ChannelBranding(primaryColor = "#000000")) }
+        val fresh = AtaliaCore("wct_test", AtaliaOptions(), api, cached, AtaliaStateHolder())
+        assertEquals("#000000", fresh.primaryColor)
+    }
+
+    @Test
+    fun chatOpenStateFollowsTheScreen() {
+        val chat = FakeChat { _, _ -> null }
+        core.activeChat = chat
+        assertTrue("o botão flutuante some com o chat aberto", state.chatOpen.value)
+        core.activeChat = null
+        assertFalse(state.chatOpen.value)
     }
 }
