@@ -59,6 +59,21 @@ Mensagem com `type` desconhecido, sem `type` ou que não seja JSON é **ignorada
 
 `app_state` não é opcional: em segundo plano o widget fecha o WebSocket e avisa a Atalia que o visitante saiu. Sem o aviso, o visitante continua contando como conectado, e é por esse sinal que as notificações push (próxima versão) vão saber quando avisar.
 
+## Notificação push
+
+Quando o visitante está fora do chat, a Atalia envia uma notificação pelo Firebase do app ou entrega o mesmo conteúdo ao backend do cliente por webhook. O `data` é igual nos dois casos, sempre com valores em texto (exigência do FCM):
+
+| Chave | Valor |
+|---|---|
+| `atalia` | `"1"`: é assim que o SDK sabe que a notificação é da Atalia |
+| `v` | versão deste formato (hoje `"1"`) |
+| `channel_token` | canal que enviou |
+| `conversation_id`, `message_id` | conversa a abrir no toque |
+| `sender_type` | `agent`, `bot` ou `system` |
+| `type` | `"test"` no teste enviado pelo painel (sem conversa) |
+
+Notificações da mesma conversa se agrupam e a nova substitui a anterior: `tag` no Android e `thread-id`/`apns-collapse-id` no iOS, valor `atalia-conv-<conversation_id>`. No Android o canal de notificação é `atalia_chat`. Exemplos em `fixtures/push-payload.json`.
+
 ## Convenções
 
 - Nome de evento e de comando em `snake_case`; chaves do payload em `camelCase`.

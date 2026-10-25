@@ -1,0 +1,26 @@
+{
+  "version": "1",
+  "atalia": [
+    {
+      "name": "mensagem do atendente",
+      "data": {
+        "atalia": "1",
+        "v": "1",
+        "channel_token": "wct_abc123",
+        "conversation_id": "812",
+        "message_id": "9001",
+        "sender_type": "agent"
+      },
+      "expect": { "conversationId": 812, "messageId": 9001, "channelToken": "wct_abc123" }
+    },
+    {
+      "name": "teste enviado pelo painel (não abre conversa)",
+      "data": { "atalia": "1", "v": "1", "type": "test", "channel_token": "wct_abc123" },
+      "expect": { "conversationId": null, "messageId": null, "channelToken": "wct_abc123" }
+    }
+  ],
+  "notAtalia": [
+    { "name": "push de outra origem", "data": { "campaign": "black-friday" } },
+    { "name": "marca errada", "data": { "atalia": "0", "conversation_id": "1" } }
+  ]
+}
