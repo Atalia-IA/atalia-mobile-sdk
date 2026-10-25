@@ -10,6 +10,7 @@ Botão flutuante novo e chat em folha, Android, iOS e React Native.
 - O chat abre numa folha que sobe sobre o app, o novo padrão. Android: `AtaliaOptions(presentation = SHEET)`, com o fundo escurecido; arrastar a alça ou tocar fora fecha. iOS: `presentationStyle: .pageSheet` (antes `.fullScreen`), a folha do sistema com a alça; `.ataliaChat(isPresented:)` segue a mesma opção. React Native: `presentationStyle` passa a valer também no Android.
 - Com o botão flutuante na tela, o chat carrega escondido e abre pronto. Escondido, ele não conecta, não marca nada como lido e a Atalia continua mandando push. O fragmento `#sdk=` ganhou o campo `background`.
 - React Native: opção `notificationIcon` no plugin do Expo, o ícone das notificações no Android (sistema e SDK).
+- React Native: o pacote se chama `@atalia-ia/react-native-chat`, no escopo da organização da Atalia no npm. Esta é a primeira versão publicada lá: a 0.3.0 tinha o escopo `@atalia`, que não é da Atalia, e não chegou ao npm.
 
 ### Correções
 
@@ -20,7 +21,7 @@ Botão flutuante novo e chat em folha, Android, iOS e React Native.
 
 React Native e Expo.
 
-- React Native e Expo: pacote `@atalia/react-native-chat`, feito com Expo Modules sobre os dois SDKs nativos. Plugin do Expo (token do canal e permissões, com o SDK configurado antes do JavaScript), chat, identificação, não lidas e estado (`useAtaliaState`), eventos, push com `@react-native-firebase/messaging` ou `expo-notifications` e botão flutuante.
+- React Native e Expo: pacote `@atalia-ia/react-native-chat`, feito com Expo Modules sobre os dois SDKs nativos. Plugin do Expo (token do canal e permissões, com o SDK configurado antes do JavaScript), chat, identificação, não lidas e estado (`useAtaliaState`), eventos, push com `@react-native-firebase/messaging` ou `expo-notifications` e botão flutuante.
 
 ### Correções
 

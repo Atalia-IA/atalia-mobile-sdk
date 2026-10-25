@@ -1,6 +1,6 @@
 name: React Native
 
-# O pacote @atalia/react-native-chat embrulha os dois SDKs nativos: roda quando qualquer um muda.
+# O pacote @atalia-ia/react-native-chat embrulha os dois SDKs nativos: roda quando qualquer um muda.
 on:
   push:
     branches: [main]

@@ -1,4 +1,4 @@
-# @atalia/react-native-chat
+# @atalia-ia/react-native-chat
 
 O chat de atendimento da [Atalia](https://atalia.ai) no seu app React Native ou Expo. É o mesmo SDK nativo de Android e iOS, chamado pelo JavaScript:
 
@@ -13,17 +13,17 @@ Funciona com Expo e com React Native puro (com os módulos do Expo). Não roda n
 ## Instalar
 
 ```bash
-npx expo install @atalia/react-native-chat
+npx expo install @atalia-ia/react-native-chat
 ```
 
-Sem Expo: `npx install-expo-modules@latest`, depois `npm install @atalia/react-native-chat` e `cd ios && pod install`.
+Sem Expo: `npx install-expo-modules@latest`, depois `npm install @atalia-ia/react-native-chat` e `cd ios && pod install`.
 
 ## Configurar
 
 ```json title="app.json"
 {
   "expo": {
-    "plugins": [["@atalia/react-native-chat", { "channelToken": "<token-do-canal>" }]]
+    "plugins": [["@atalia-ia/react-native-chat", { "channelToken": "<token-do-canal>" }]]
   }
 }
 ```
@@ -33,7 +33,7 @@ O token fica no painel da Atalia, em Configurações › Canais › Editar canal
 ## Usar
 
 ```tsx
-import Atalia, { useAtaliaUnreadCount } from '@atalia/react-native-chat';
+import Atalia, { useAtaliaUnreadCount } from '@atalia-ia/react-native-chat';
 
 function BotaoSuporte() {
   const unread = useAtaliaUnreadCount();

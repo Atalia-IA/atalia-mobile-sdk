@@ -3,7 +3,7 @@
   "compilerOptions": {
     "strict": true,
     "paths": {
-      "@atalia/react-native-chat": ["../src"]
+      "@atalia-ia/react-native-chat": ["../src"]
     }
   }
 }

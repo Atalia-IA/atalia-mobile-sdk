@@ -1,4 +1,4 @@
-import Atalia, { type AtaliaLauncherOptions, useAtaliaState } from '@atalia/react-native-chat';
+import Atalia, { type AtaliaLauncherOptions, useAtaliaState } from '@atalia-ia/react-native-chat';
 import { useEffect, useState } from 'react';
 import { Alert, Button, StyleSheet, Text, TextInput, View } from 'react-native';
 

@@ -12,7 +12,7 @@ import {
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const pkg: { name: string; version: string } = require('../../package.json');
 
-/** Opções do plugin no app.json / app.config: `["@atalia/react-native-chat", { ... }]`. */
+/** Opções do plugin no app.json / app.config: `["@atalia-ia/react-native-chat", { ... }]`. */
 export type AtaliaPluginProps = {
   /**
    * Token do canal. Com ele o SDK é configurado ao iniciar o app, antes do JavaScript: o toque numa
@@ -100,7 +100,7 @@ const withNotificationIcon: ConfigPlugin<string> = (config, icon) =>
     async (mod) => {
       const source = path.resolve(mod.modRequest.projectRoot, icon);
       if (path.extname(source).toLowerCase() !== '.png' || !fs.existsSync(source)) {
-        throw new Error(`[@atalia/react-native-chat] notificationIcon: PNG não encontrado em ${source}`);
+        throw new Error(`[@atalia-ia/react-native-chat] notificationIcon: PNG não encontrado em ${source}`);
       }
       const dir = path.join(mod.modRequest.platformProjectRoot, 'app', 'src', 'main', 'res', 'drawable-xxxhdpi');
       await fs.promises.mkdir(dir, { recursive: true });

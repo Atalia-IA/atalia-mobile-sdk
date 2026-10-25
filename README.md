@@ -13,7 +13,7 @@ O chat de atendimento da [Atalia](https://atalia.ai) dentro do seu app Android, 
 |---|---|---|
 | iOS | iOS 15+ (testado com Xcode 26) | Swift Package Manager: `https://github.com/Atalia-IA/atalia-mobile-sdk` |
 | Android | Android 7.0 (API 24)+ | `ai.atalia:chat` (Maven Central) |
-| React Native / Expo | development build (testado com Expo SDK 58) | `@atalia/react-native-chat` (npm), ver [react-native/](react-native/README.md) |
+| React Native / Expo | development build (testado com Expo SDK 58) | `@atalia-ia/react-native-chat` (npm), ver [react-native/](react-native/README.md) |
 
 Documentação completa, com push e a referência de todos os tipos: [chat.atalia.ai/docs/sdk](https://chat.atalia.ai/docs/sdk/visao-geral).
 

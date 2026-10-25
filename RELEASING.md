@@ -54,11 +54,11 @@ Antes do **Publish** ainda dá para voltar atrás: **Drop** descarta o envio, e 
 Só depois que o Maven Central mostrar a versão (passo 4): o pacote React Native usa no Android o `ai.atalia:chat` da mesma versão, e publicar antes quebraria o build de quem instalasse na hora.
 
 1. Aba **Actions** › **Publicar no npm** › **Run workflow**, com a versão (`0.4.0`).
-2. O workflow confere que a versão já está no Maven Central, roda os testes e publica `@atalia/react-native-chat` com procedência (provenance).
+2. O workflow confere que a versão já está no Maven Central, roda os testes e publica `@atalia-ia/react-native-chat` com procedência (provenance).
 
 No npm também nada se apaga depois de 72 horas: versão errada se corrige com a próxima.
 
-**Primeira publicação do pacote (0.3.0):** pode ser pelo seu computador, com o seu login do npm (que já tem 2FA), sem token: `npm login` e depois `cd react-native && npm publish --access public`. O `prepare` copia o SDK iOS e compila antes de publicar.
+**Primeira publicação do pacote (0.4.0):** pode ser pelo workflow ou pelo seu computador, com o seu login do npm (que já tem 2FA), sem token: `npm login` e depois `cd react-native && npm publish --access public`. O `prepare` copia o SDK iOS e compila antes de publicar. A 0.3.0 não chegou ao npm: o pacote se chamava `@atalia/...`, um escopo que não é da Atalia, e o npm responde **404** a quem publica em escopo alheio.
 
 ## Secrets do repositório (uma vez só)
 
@@ -70,8 +70,8 @@ Em **Settings › Secrets and variables › Actions › New repository secret**:
 | `MAVEN_CENTRAL_PASSWORD` | O campo *Password* do mesmo token |
 | `SIGNING_KEY` | Chave privada GPG da Atalia: `gpg --armor --export-secret-keys BAA42FEF1D0378ED` (o texto inteiro, de `-----BEGIN` a `-----END`) |
 | `SIGNING_KEY_PASSWORD` | A senha dessa chave |
-| `NPM_TOKEN` | npmjs.com › Access Tokens › **Generate New Token** (Granular), com permissão de escrita na organização `atalia` |
+| `NPM_TOKEN` | npmjs.com › Access Tokens › **Generate New Token** (Granular): em **Packages and scopes**, *Read and write* no escopo `@atalia-ia` (ou *All packages*); marque *Bypass two-factor authentication* para o workflow conseguir publicar |
 
-Antes do primeiro `NPM_TOKEN`, crie a organização **atalia** no npmjs.com (Add Organization, plano gratuito para pacotes públicos): é ela que dá o escopo `@atalia/`.
+O escopo `@atalia-ia/` vem da organização **atalia-ia** no npmjs.com. O nome do pacote (`react-native/package.json`) tem que usar o escopo de uma organização da Atalia: em escopo alheio, o npm responde 404 no `PUT`.
 
 A parte pública da chave (`BAA42FEF1D0378ED`, `Atalia <suporte@atalia.com.br>`) está em `keyserver.ubuntu.com`, onde o Maven Central confere as assinaturas.
