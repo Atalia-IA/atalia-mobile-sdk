@@ -181,7 +181,7 @@ object Atalia {
         val current = core
         current?.let { scope.launch { runCatching { it.refreshUnread() } } }
         if (current?.shouldShowNotification() == false) return true
-        val icon = current?.options?.notificationIcon ?: context.applicationInfo.icon
+        val icon = current?.options?.notificationIcon ?: R.drawable.atalia_ic_chat
         AtaliaNotifications.show(context.applicationContext, payload, title, body, icon)
         return true
     }

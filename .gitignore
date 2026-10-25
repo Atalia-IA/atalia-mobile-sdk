@@ -15,3 +15,12 @@ local.properties
 *.iml
 captures/
 .kotlin/
+
+# React Native / Expo
+node_modules/
+*.tgz
+react-native/ios/vendor/
+react-native/LICENSE
+react-native/example/android/
+react-native/example/ios/
+react-native/example/.expo/

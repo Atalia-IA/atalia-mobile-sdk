@@ -1,0 +1,10 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["AtaliaChatModule"],
+    "appDelegateSubscribers": ["AtaliaChatAppDelegateSubscriber"]
+  },
+  "android": {
+    "modules": ["ai.atalia.chat.reactnative.AtaliaChatModule"]
+  }
+}

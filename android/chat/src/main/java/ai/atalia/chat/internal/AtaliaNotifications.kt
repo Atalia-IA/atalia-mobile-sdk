@@ -59,6 +59,9 @@ internal object AtaliaNotifications {
         } catch (_: SecurityException) {
             // Android 13+ sem a permissão POST_NOTIFICATIONS concedida.
             false
+        } catch (_: IllegalArgumentException) {
+            // Ícone recusado pelo sistema (ex.: notificationIcon colorido): sem notificação, mas o app segue.
+            false
         }
     }
 

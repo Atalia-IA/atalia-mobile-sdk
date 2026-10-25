@@ -13,7 +13,8 @@ import android.net.Uri
  * @property urlHandler Decide como abrir links tocados no chat. Devolva `true` se o app tratou;
  *   `false` abre pelo sistema (navegador, discador, WhatsApp).
  * @property notificationIcon Ícone pequeno (monocromático) das notificações do chat. Sem ele, o
- *   ícone do app, que em muitos aparelhos aparece como um quadrado branco.
+ *   balão de conversa da Atalia. O ícone do app não serve: colorido ou adaptativo, vira um quadrado
+ *   branco ou é recusado pelo sistema.
  */
 data class AtaliaOptions @JvmOverloads constructor(
     val baseUrl: String = DEFAULT_BASE_URL,

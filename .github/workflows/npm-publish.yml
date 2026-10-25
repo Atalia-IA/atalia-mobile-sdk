@@ -1,0 +1,48 @@
+name: Publicar no npm
+
+# Rode à mão (Actions › Publicar no npm › Run workflow) DEPOIS do Publish da mesma versão no
+# Maven Central: no Android o pacote React Native usa o ai.atalia:chat desta versão, e publicar
+# antes quebraria o build de quem instalasse na hora.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Versão já lançada (a tag do release, ex. 0.3.0)
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: react-native
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.version }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - name: Conferir a versão e o Maven Central
+        env:
+          VERSION: ${{ inputs.version }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          [ -n "$NPM_TOKEN" ] || { echo "::error::Secret NPM_TOKEN não cadastrado (Settings › Secrets and variables › Actions)"; exit 1; }
+          PKG=$(node -p "require('./package.json').version")
+          [ "$PKG" = "$VERSION" ] || { echo "::error::react-native/package.json está em $PKG, não em $VERSION"; exit 1; }
+          curl -sfI "https://repo1.maven.org/maven2/ai/atalia/chat/$VERSION/chat-$VERSION.pom" > /dev/null \
+            || { echo "::error::ai.atalia:chat:$VERSION ainda não está no Maven Central. Clique em Publish no portal e espere até 30 minutos."; exit 1; }
+      - name: Dependências e testes
+        run: |
+          npm ci
+          npm test
+      - name: Publicar
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public --provenance

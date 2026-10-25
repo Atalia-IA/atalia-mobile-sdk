@@ -28,6 +28,8 @@ jobs:
             || { echo "::error::Atalia.SDK_VERSION (Android) não é $TAG"; exit 1; }
           grep -q "sdkVersion = \"$TAG\"" ios/Sources/AtaliaChat/Atalia.swift \
             || { echo "::error::Atalia.sdkVersion (iOS) não é $TAG"; exit 1; }
+          [ "$(node -p "require('./react-native/package.json').version")" = "$TAG" ] \
+            || { echo "::error::react-native/package.json não está em $TAG"; exit 1; }
 
   ios:
     needs: verify

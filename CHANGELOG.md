@@ -2,6 +2,14 @@
 
 Versões seguem [SemVer](https://semver.org/lang/pt-BR/). O protocolo do bridge tem versão própria (ver [protocol/README.md](protocol/README.md)).
 
+## Não lançada
+
+- React Native e Expo: pacote `@atalia/react-native-chat`, feito com Expo Modules sobre os dois SDKs nativos. Plugin do Expo (token do canal e permissões, com o SDK configurado antes do JavaScript), chat, identificação, não lidas e estado (`useAtaliaState`), eventos, push com `@react-native-firebase/messaging` ou `expo-notifications` e botão flutuante.
+
+### Correções
+
+- Android: sem `notificationIcon`, a notificação com o app aberto usa o balão da Atalia. Antes usava o ícone do app, que o sistema pode recusar ("Invalid notification (no valid small icon)") e fechava o app.
+
 ## 0.2.0 (2026-10-25)
 
 Notificações push e botão flutuante, Android e iOS.

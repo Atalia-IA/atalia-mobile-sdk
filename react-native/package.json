@@ -1,0 +1,61 @@
+{
+  "name": "@atalia/react-native-chat",
+  "version": "0.2.0",
+  "description": "Chat de atendimento da Atalia em apps React Native e Expo: chat, identificação do usuário, não lidas, push e botão flutuante.",
+  "main": "build/index.js",
+  "types": "build/index.d.ts",
+  "files": [
+    "build",
+    "plugin/build",
+    "app.plugin.js",
+    "expo-module.config.json",
+    "ios/*.swift",
+    "ios/*.podspec",
+    "ios/vendor",
+    "android/build.gradle",
+    "android/src/main",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "sync-native": "node scripts/sync-ios-sdk.js",
+    "build": "tsc && tsc -p plugin",
+    "clean": "node -e \"for (const d of ['build','plugin/build','ios/vendor']) require('fs').rmSync(d,{recursive:true,force:true})\"",
+    "prepare": "node scripts/sync-ios-sdk.js && tsc && tsc -p plugin",
+    "typecheck": "tsc --noEmit && tsc -p plugin --noEmit",
+    "test": "tsc && node --test test/*.test.js"
+  },
+  "keywords": [
+    "react-native",
+    "expo",
+    "atalia",
+    "chat",
+    "atendimento",
+    "webchat",
+    "push"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Atalia-IA/atalia-mobile-sdk",
+    "directory": "react-native"
+  },
+  "bugs": {
+    "url": "https://github.com/Atalia-IA/atalia-mobile-sdk/issues"
+  },
+  "homepage": "https://github.com/Atalia-IA/atalia-mobile-sdk/tree/main/react-native#readme",
+  "author": "Atalia <suporte@atalia.com.br> (https://atalia.ai)",
+  "license": "MIT",
+  "peerDependencies": {
+    "expo": "*",
+    "react": "*",
+    "react-native": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "~19.3.0",
+    "expo": "^58.0.11",
+    "react": "19.3.0",
+    "react-native": "0.88.0",
+    "typescript": "~6.0.3"
+  }
+}

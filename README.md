@@ -1,18 +1,21 @@
 # Atalia Chat · SDK mobile
 
-O chat de atendimento da [Atalia](https://atalia.ai) dentro do seu app Android ou iOS, com todos os recursos do webchat:
+O chat de atendimento da [Atalia](https://atalia.ai) dentro do seu app Android, iOS ou React Native/Expo, com todos os recursos do webchat:
 
 - mensagens com botões, listas, carrossel e cobrança Pix;
 - anexos, câmera e nota de voz;
 - avaliação do atendimento e horário de atendimento;
 - histórico do usuário logado.
 
-> **Versão 0.2.0.** Até a 1.0 a API ainda pode mudar entre versões; o [CHANGELOG](CHANGELOG.md) diz o que mudou. React Native/Expo e Flutter entram nas próximas versões.
+> **Versão 0.2.0.** Até a 1.0 a API ainda pode mudar entre versões; o [CHANGELOG](CHANGELOG.md) diz o que mudou.
 
 | Plataforma | Requisito | Pacote |
 |---|---|---|
 | iOS | iOS 15+ (testado com Xcode 26) | Swift Package Manager: `https://github.com/Atalia-IA/atalia-mobile-sdk` |
 | Android | Android 7.0 (API 24)+ | `ai.atalia:chat` (Maven Central) |
+| React Native / Expo | development build (testado com Expo SDK 58) | `@atalia/react-native-chat` (npm), ver [react-native/](react-native/README.md) |
+
+Documentação completa, com push e a referência de todos os tipos: [chat.atalia.ai/docs/sdk](https://chat.atalia.ai/docs/sdk/visao-geral).
 
 ## Como funciona
 
@@ -107,7 +110,7 @@ De Java, use as versões com callback: `Atalia.identify(jwt, callback)`, `Atalia
 
 ## Botão flutuante
 
-Opcional: o SDK não desenha nada por cima do app sem você pedir. Quem prefere um botão próprio chama `Atalia.present()` / `Atalia.open()`.
+Opcional: o SDK não desenha nada por cima do app sem você pedir. Quem prefere um botão próprio chama `Atalia.present()` (iOS) / `Atalia.open(context)` (Android).
 
 A aparência vem do painel da Atalia, a mesma do botão do site: cor, texto ("Fale conosco") e lado da tela. Mudou no painel, muda no app sem atualizar nada. O botão:
 
@@ -334,7 +337,7 @@ Passadas no `configure` (`AtaliaOptions`):
 | `closeButton` | `true` | Desligue quando o chat for uma aba do app |
 | `presentationStyle` (só iOS) | `.fullScreen` | `.pageSheet` abre como folha |
 | `urlHandler` (só Android) | nenhum | Decide como abrir os links tocados no chat. No iOS: `Atalia.urlHandler` |
-| `notificationIcon` (só Android) | ícone do app | Ícone da notificação mostrada com o app aberto |
+| `notificationIcon` (só Android) | balão da Atalia | Ícone pequeno (monocromático) da notificação mostrada com o app aberto |
 | `appBadge` (só iOS) | `true` | Com o push ligado, o número no ícone do app acompanha as não lidas. Desligue se o app tem contador próprio: o push da Atalia também deixa de mexer nele |
 | `debug` | `false` | Inspecionar o WebView (Safari / `chrome://inspect`). Nunca em produção |
 
@@ -352,7 +355,11 @@ O Android pede o JDK 17 (o do Android Studio serve).
 swift test                                    # iOS: núcleo, roda no macOS
 cd android && ./gradlew :chat:testDebugUnitTest   # Android: testes de JVM
 cd android && ./gradlew :sample:installDebug -Patalia.channelToken=<token>   # app de exemplo
+cd react-native && npm install && npm test       # React Native: tipos e testes
+cd react-native/example && npm install && ATALIA_CHANNEL_TOKEN=<token> npx expo run:android
 ```
+
+O pacote React Native compila o SDK iOS deste repositório dentro do próprio pod (o `npm install` copia `ios/Sources` para `react-native/ios/vendor`) e usa o `ai.atalia:chat` da mesma versão no Android.
 
 O contrato com o chat (bridge) está em [protocol/README.md](protocol/README.md), e os testes das duas plataformas leem as mesmas fixtures de `protocol/fixtures/`. Para lançar uma versão, veja [RELEASING.md](RELEASING.md).
 

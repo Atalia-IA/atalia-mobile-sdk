@@ -1,0 +1,27 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+def packageJson = new groovy.json.JsonSlurper().parseText(file('../package.json').text)
+
+group = 'ai.atalia.chat.reactnative'
+version = packageJson.version
+
+android {
+  namespace 'ai.atalia.chat.reactnative'
+  defaultConfig {
+    versionCode 1
+    versionName packageJson.version
+  }
+  lintOptions {
+    abortOnError false
+  }
+}
+
+dependencies {
+  // O SDK Android, na mesma versão deste pacote (Maven Central). Para testar um SDK local:
+  // -Patalia.sdkVersion=<versão publicada com publishToMavenLocal> e mavenLocal() no app.
+  def sdkVersion = project.findProperty('atalia.sdkVersion') ?: packageJson.version
+  implementation "ai.atalia:chat:${sdkVersion}"
+}

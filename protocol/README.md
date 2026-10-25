@@ -57,7 +57,7 @@ Mensagem com `type` desconhecido, sem `type` ou que não seja JSON é **ignorada
 | `open_home` | `null` |
 | `app_state` | `{ state: "background" \| "foreground" }` |
 
-`app_state` não é opcional: em segundo plano o widget fecha o WebSocket e avisa a Atalia que o visitante saiu. Sem o aviso, o visitante continua contando como conectado, e é por esse sinal que as notificações push (próxima versão) vão saber quando avisar.
+`app_state` não é opcional: em segundo plano o widget fecha o WebSocket e avisa a Atalia que o visitante saiu. Sem o aviso, o visitante continua contando como conectado, e é por esse sinal que as notificações push sabem quando avisar.
 
 ## Notificação push
 

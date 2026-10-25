@@ -1,0 +1,77 @@
+name: React Native
+
+# O pacote @atalia/react-native-chat embrulha os dois SDKs nativos: roda quando qualquer um muda.
+on:
+  push:
+    branches: [main]
+    paths: ['react-native/**', 'ios/**', 'android/**', 'protocol/**', '.github/workflows/react-native.yml']
+  pull_request:
+    paths: ['react-native/**', 'ios/**', 'android/**', 'protocol/**', '.github/workflows/react-native.yml']
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: react-native
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Dependências (o prepare copia o SDK iOS e compila)
+        run: npm ci
+      - name: Tipos
+        run: npm run typecheck
+      - name: Testes
+        run: npm test
+      - name: Conteúdo do pacote
+        run: npm pack --dry-run
+
+  # Compila o módulo dentro de um app Expo de verdade: é o único jeito de pegar erro do Kotlin
+  # e do Swift da ponte. O SDK Android sai do código deste commit (mavenLocal), não do Maven Central.
+  android-example:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - name: SDK Android no mavenLocal
+        working-directory: android
+        run: |
+          VERSION=$(node -p "require('../react-native/package.json').version")
+          ./gradlew :chat:publishToMavenLocal -PVERSION_NAME="$VERSION"
+      - name: Pacote e app de exemplo
+        run: |
+          (cd react-native && npm ci)
+          (cd react-native/example && npm ci && npx expo prebuild --platform android --no-install)
+      - name: Build do app de exemplo
+        working-directory: react-native/example/android
+        run: |
+          printf '\nallprojects { repositories { mavenLocal() } }\n' >> build.gradle
+          ./gradlew assembleDebug -PreactNativeArchitectures=x86_64
+
+  ios-example:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Xcode mais novo da máquina (o React Native novo pede Xcode recente)
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)" && xcodebuild -version
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Pacote e app de exemplo
+        run: |
+          (cd react-native && npm ci)
+          (cd react-native/example && npm ci && npx expo prebuild --platform ios)
+      - name: Build do app de exemplo (simulador, sem assinatura)
+        working-directory: react-native/example/ios
+        run: |
+          xcodebuild -workspace AtaliaChatRN.xcworkspace -scheme AtaliaChatRN -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
