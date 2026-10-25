@@ -13,15 +13,15 @@ Troque a versão nos dois arquivos (o workflow recusa a release se não baterem 
 
 | Arquivo | Linha |
 |---|---|
-| `android/chat/src/main/java/ai/atalia/chat/Atalia.kt` | `const val SDK_VERSION = "0.1.0"` |
-| `ios/Sources/AtaliaChat/Atalia.swift` | `public nonisolated static let sdkVersion = "0.1.0"` |
+| `android/chat/src/main/java/ai/atalia/chat/Atalia.kt` | `const val SDK_VERSION = "x.y.z"` |
+| `ios/Sources/AtaliaChat/Atalia.swift` | `public nonisolated static let sdkVersion = "x.y.z"` |
 
-Descreva as mudanças no [`CHANGELOG.md`](CHANGELOG.md), faça o commit e o push.
+Descreva as mudanças no [`CHANGELOG.md`](CHANGELOG.md) e troque a versão do `implementation(...)` no README. Faça o commit e o push.
 
 ## 2. Criar o release no GitHub
 
 1. Abra **Releases › Draft a new release**.
-2. Em **Choose a tag**, digite a versão (`0.1.0`, sem "v") e crie a tag.
+2. Em **Choose a tag**, digite a versão (`0.2.0`, sem "v") e crie a tag.
 3. Título igual à versão; cole as notas do CHANGELOG.
 4. **Publish release.**
 
