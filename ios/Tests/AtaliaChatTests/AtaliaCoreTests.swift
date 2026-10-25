@@ -230,12 +230,30 @@ final class AtaliaCoreTests: XCTestCase {
     func testBrandingColorIsLoaded() {
         XCTAssertEqual(core.primaryColorHex, "#112233")
     }
+
+    func testCachedColorFirstThenOpenChatFollowsTheChannel() async {
+        let store = MemorySessionStore()
+        store.savePrimaryColor("#000000")
+        let core = makeCore(store: store)
+        XCTAssertEqual(core.primaryColorHex, "#000000", "a tela aberta logo ao iniciar já nasce com a cor salva")
+        let chat = FakeChat()
+        core.activeChat = chat
+
+        await settle()
+
+        XCTAssertEqual(core.primaryColorHex, "#112233")
+        XCTAssertEqual(store.loadPrimaryColor(), "#112233")
+        XCTAssertEqual(chat.colorChanges, 1, "o topo da tela aberta troca de cor")
+    }
 }
 
 @MainActor
 private final class FakeChat: ChatBridgeTarget {
     var commands: [(type: String, payload: [String: Any]?)] = []
     var onCommand: ((String, [String: Any]?) -> Void)?
+    var colorChanges = 0
+
+    func primaryColorDidChange() { colorChanges += 1 }
 
     func sendCommand(_ type: String, payload: [String: Any]?) {
         commands.append((type, payload))

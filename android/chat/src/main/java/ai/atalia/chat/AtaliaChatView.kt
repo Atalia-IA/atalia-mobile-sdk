@@ -56,6 +56,9 @@ class AtaliaChatView @JvmOverloads constructor(
         fun showFileChooser(callback: ValueCallback<Array<Uri>>, params: WebChromeClient.FileChooserParams): Boolean
 
         fun requestPermission(permission: String, onResult: (Boolean) -> Unit)
+
+        /** A cor do canal chegou com a tela já aberta (primeira abertura, ou o canal mudou de cor). */
+        fun onPrimaryColorChanged(color: String) {}
     }
 
     var host: Host? = null
@@ -69,6 +72,10 @@ class AtaliaChatView @JvmOverloads constructor(
 
     private val bridgeTarget = object : ChatBridgeTarget {
         override fun sendCommand(type: String, payload: JSONObject?) = this@AtaliaChatView.sendCommand(type, payload)
+
+        override fun primaryColorChanged(color: String) {
+            host?.onPrimaryColorChanged(color)
+        }
     }
 
     init {

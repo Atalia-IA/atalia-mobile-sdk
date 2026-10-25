@@ -61,7 +61,7 @@ Text("\(atalia.unreadCount)")
 - `NSCameraUsageDescription` (foto pelo chat);
 - `NSMicrophoneUsageDescription` (nota de voz).
 
-Sem a do microfone, o SDK nega o pedido e o chat mostra um aviso: o app não fecha.
+Sem a do microfone, o SDK nega o pedido e o chat mostra um aviso: o app não fecha. A da câmera é obrigatória: sem ela, o iOS fecha o app quando o visitante escolhe tirar uma foto no chat.
 
 ## Android
 
@@ -220,19 +220,25 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
 
     // App aberto: sem banner quando o chat já está na tela.
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
-                                            willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
-        if let options = Atalia.presentationOptions(for: notification) { return options }
-        return [.banner, .sound] // as notificações do seu app
+                                            willPresent notification: UNNotification,
+                                            withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler(Atalia.presentationOptions(for: notification) ?? [.banner, .sound]) // senão, as do seu app
     }
 
     // Toque: abre o chat na conversa, inclusive quando o toque é que abriu o app.
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
-                                            didReceive response: UNNotificationResponse) async {
-        if Atalia.handleNotificationTap(response.notification.request.content.userInfo) { return }
-        // ...as notificações do seu app
+                                            didReceive response: UNNotificationResponse,
+                                            withCompletionHandler completionHandler: @escaping () -> Void) {
+        if !Atalia.handleNotificationTap(response.notification.request.content.userInfo) {
+            // ...as notificações do seu app
+        }
+        completionHandler()
     }
 }
 ```
+
+> [!WARNING]
+> Use as versões com `completionHandler` destes dois métodos, não as `async`. Na `async` o Swift chama o `completionHandler` do iOS fora da main thread, e o UIKit fecha o app no toque da notificação.
 
 Em SwiftUI, ligue o `AppDelegate` com `@UIApplicationDelegateAdaptor(AppDelegate.self)`.
 

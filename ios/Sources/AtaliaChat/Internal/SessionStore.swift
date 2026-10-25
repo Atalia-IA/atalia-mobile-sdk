@@ -24,6 +24,9 @@ protocol SessionStoring: AnyObject {
     func loadPushToken() -> StoredPushToken?
     func savePushToken(_ token: StoredPushToken)
     func clearPushToken()
+    /// Cor do canal da última consulta, para o topo do chat não piscar na cor padrão.
+    func loadPrimaryColor() -> String?
+    func savePrimaryColor(_ color: String)
 }
 
 /// Um item por canal e origem: o mesmo app pode falar com mais de um canal (ou com homologação).
@@ -42,6 +45,9 @@ final class KeychainSessionStore: SessionStoring {
     func loadPushToken() -> StoredPushToken? { read("\(account)|push") }
     func savePushToken(_ token: StoredPushToken) { write(token, to: "\(account)|push") }
     func clearPushToken() { delete("\(account)|push") }
+
+    func loadPrimaryColor() -> String? { read("\(account)|color") }
+    func savePrimaryColor(_ color: String) { write(color, to: "\(account)|color") }
 
     private func query(_ account: String) -> [String: Any] {
         [
@@ -84,6 +90,7 @@ final class KeychainSessionStore: SessionStoring {
 final class MemorySessionStore: SessionStoring {
     private var session: StoredSession?
     private var pushToken: StoredPushToken?
+    private var primaryColor: String?
 
     init(_ session: StoredSession? = nil) {
         self.session = session
@@ -96,4 +103,7 @@ final class MemorySessionStore: SessionStoring {
     func loadPushToken() -> StoredPushToken? { pushToken }
     func savePushToken(_ token: StoredPushToken) { pushToken = token }
     func clearPushToken() { pushToken = nil }
+
+    func loadPrimaryColor() -> String? { primaryColor }
+    func savePrimaryColor(_ color: String) { primaryColor = color }
 }

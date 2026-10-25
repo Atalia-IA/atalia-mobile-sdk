@@ -37,7 +37,7 @@ public final class AtaliaChatViewController: UIViewController {
     public override func viewDidLoad() {
         super.viewDidLoad()
         // Topo na cor do canal (atrás da barra de status), fundo do rodapé claro.
-        view.backgroundColor = UIColor(ataliaHex: AtaliaCore.shared.primaryColorHex) ?? UIColor(red: 0.063, green: 0.212, blue: 0.949, alpha: 1)
+        applyPrimaryColor()
         let bottomFill = UIView()
         bottomFill.backgroundColor = .white
         bottomFill.translatesAutoresizingMaskIntoConstraints = false
@@ -332,6 +332,14 @@ public final class AtaliaChatViewController: UIViewController {
 }
 
 extension AtaliaChatViewController: ChatBridgeTarget {
+    func primaryColorDidChange() {
+        applyPrimaryColor()
+    }
+
+    private func applyPrimaryColor() {
+        view.backgroundColor = UIColor(ataliaHex: AtaliaCore.shared.primaryColorHex) ?? UIColor(red: 0.063, green: 0.212, blue: 0.949, alpha: 1)
+    }
+
     func sendCommand(_ type: String, payload: [String: Any]?) {
         guard isReady, let webView else {
             // Estado do app antes de o chat carregar não vale nada: ele já nasce em primeiro plano.

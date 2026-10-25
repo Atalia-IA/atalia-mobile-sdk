@@ -22,6 +22,9 @@ import java.util.concurrent.CopyOnWriteArraySet
 /** Quem recebe comandos nativo → web: a tela do chat aberta no momento. */
 internal interface ChatBridgeTarget {
     fun sendCommand(type: String, payload: JSONObject?)
+
+    /** A cor do canal chegou (ou mudou) com a tela já aberta. */
+    fun primaryColorChanged(color: String) {}
 }
 
 /** Fluxos que sobrevivem a um novo `configure` (o app pode observar antes de configurar). */
@@ -217,10 +220,10 @@ internal class AtaliaCore(
     suspend fun loadBranding() {
         val response = runCatching { api.channelConfig() }.getOrNull() ?: return
         val color = response.json?.optJSONObject("branding")?.opt("primary_color") as? String ?: return
-        if (response.isSuccess) {
-            primaryColor = color
-            store.savePrimaryColor(color)
-        }
+        if (!response.isSuccess || color == primaryColor) return
+        primaryColor = color
+        store.savePrimaryColor(color)
+        dispatchToMain { activeChat?.primaryColorChanged(color) }
     }
 
     // Bridge

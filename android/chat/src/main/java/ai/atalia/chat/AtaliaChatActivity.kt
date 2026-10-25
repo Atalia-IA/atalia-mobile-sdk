@@ -33,6 +33,7 @@ class AtaliaChatActivity : ComponentActivity(), AtaliaChatView.Host {
     }
 
     private lateinit var chatView: AtaliaChatView
+    private var topInset: View? = null
     private var fileCallback: ValueCallback<Array<Uri>>? = null
     private var cameraOutput: Uri? = null
     private var permissionResult: ((Boolean) -> Unit)? = null
@@ -63,8 +64,8 @@ class AtaliaChatActivity : ComponentActivity(), AtaliaChatView.Host {
             statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
         )
-        val primary = runCatching { Color.parseColor(core.primaryColor ?: DEFAULT_PRIMARY) }.getOrDefault(Color.parseColor(DEFAULT_PRIMARY))
-        val topInset = View(this).apply { setBackgroundColor(primary) }
+        val topInset = View(this).apply { setBackgroundColor(parsePrimary(core.primaryColor)) }
+        this.topInset = topInset
         val bottomInset = View(this).apply { setBackgroundColor(Color.WHITE) }
         chatView = AtaliaChatView(this).also { it.host = this }
         val root = LinearLayout(this).apply {
@@ -118,6 +119,13 @@ class AtaliaChatActivity : ComponentActivity(), AtaliaChatView.Host {
     // AtaliaChatView.Host
 
     override fun onCloseRequested() = finish()
+
+    override fun onPrimaryColorChanged(color: String) {
+        topInset?.setBackgroundColor(parsePrimary(color))
+    }
+
+    private fun parsePrimary(color: String?): Int =
+        runCatching { Color.parseColor(color ?: DEFAULT_PRIMARY) }.getOrDefault(Color.parseColor(DEFAULT_PRIMARY))
 
     override fun showFileChooser(callback: ValueCallback<Array<Uri>>, params: WebChromeClient.FileChooserParams): Boolean {
         deliverFiles(null)

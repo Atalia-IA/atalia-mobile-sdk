@@ -7,6 +7,12 @@ import UIKit
 @MainActor
 protocol ChatBridgeTarget: AnyObject {
     func sendCommand(_ type: String, payload: [String: Any]?)
+    /// A cor do canal chegou (ou mudou) com a tela já aberta.
+    func primaryColorDidChange()
+}
+
+extension ChatBridgeTarget {
+    func primaryColorDidChange() {}
 }
 
 /// Estado e regras do SDK. A fachada pública é `Atalia`; os testes criam instâncias próprias.
@@ -67,6 +73,9 @@ final class AtaliaCore {
             pendingPushToken = nil
         }
         state.isIdentified = store.load()?.identified ?? false
+        // Cor da última abertura: a tela aberta pelo toque numa notificação, logo ao iniciar o app,
+        // já nasce com o topo certo, antes de a consulta ao canal voltar.
+        primaryColorHex = store.loadPrimaryColor()
         observeForeground()
         Task { [weak self] in
             await self?.loadChannelBranding()
@@ -390,9 +399,12 @@ final class AtaliaCore {
               let response = try? await config.api.channelConfig(),
               response.isSuccess,
               let branding = response.json?["branding"] as? [String: Any],
-              let color = branding["primary_color"] as? String
+              let color = branding["primary_color"] as? String,
+              color != primaryColorHex
         else { return }
         primaryColorHex = color
+        config.store.savePrimaryColor(color)
+        activeChat?.primaryColorDidChange()
     }
 
     private func observeForeground() {
