@@ -35,6 +35,7 @@ Sempre uma **string JSON** `{ "v": 1, "type": "...", "payload": {...} | null }`.
 | `session_changed` | `{ sessionToken, identified, externalId }` | Guarda a sessão no Keychain/Keystore. |
 | `ready` | `null` | Evento `ready`; libera comandos enfileirados. |
 | `close` | `null` | Fecha a tela do chat. |
+| `background_changed` | `{ color }` (`#rrggbb`) | Pinta a faixa abaixo do chat (atrás do teclado e da barra do sistema) com o fundo do painel do widget, que muda com a tela (branco na home, o da conversa nela). |
 | `unread_changed` | `{ count }` | Atualiza o contador de não lidas. |
 | `message_received` | `{ conversationId, messageId }` | Evento público. |
 | `conversation_started` / `conversation_closed` | `{ conversationId }` | Evento público. |

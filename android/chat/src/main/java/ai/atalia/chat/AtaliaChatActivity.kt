@@ -108,7 +108,9 @@ class AtaliaChatActivity : ComponentActivity(), AtaliaChatView.Host {
         val topBar = FrameLayout(this).apply { setBackgroundColor(primary) }
         this.topBar = topBar
         if (sheet) topBar.addView(grabber(), FrameLayout.LayoutParams(dp(36), dp(5), Gravity.CENTER))
-        val bottomInset = View(this).apply { setBackgroundColor(Color.WHITE) }
+        // Faixa abaixo do chat (barra de navegação e teclado): o fundo do widget, que muda com a tela.
+        val bottomInset = View(this).apply { setBackgroundColor(chatView.pageBackground ?: Color.WHITE) }
+        chatView.onPageBackgroundChanged = { color -> bottomInset.setBackgroundColor(color) }
         (chatView.parent as? ViewGroup)?.removeView(chatView)
         val panel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -171,6 +173,8 @@ class AtaliaChatActivity : ComponentActivity(), AtaliaChatView.Host {
     override fun onDestroy() {
         if (::chatView.isInitialized) {
             deliverFiles(null)
+            // O chat pode voltar a esperar escondido: não pode segurar esta tela pelo callback.
+            chatView.onPageBackgroundChanged = null
             // Com botão flutuante na tela, o chat volta a esperar escondido; senão, é destruído.
             if (!ChatPrewarm.recycle(chatView, applicationContext)) chatView.destroy()
             if (isFinishing) Atalia.coreOrNull()?.emit(AtaliaEvent.Closed)

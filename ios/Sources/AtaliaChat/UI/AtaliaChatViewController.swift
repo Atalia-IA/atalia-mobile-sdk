@@ -14,6 +14,9 @@ public final class AtaliaChatViewController: UIViewController {
     private let initialConversationId: Int?
     private var webView: WKWebView?
     private var webViewTop: NSLayoutConstraint?
+    private let bottomFill = UIView()
+    /// Último fundo avisado pelo widget: a próxima tela já nasce com ele.
+    private static var lastBackground: UIColor?
     private let spinner = UIActivityIndicatorView(style: .large)
     private var errorView: UIView?
     private var isReady = false
@@ -62,16 +65,16 @@ public final class AtaliaChatViewController: UIViewController {
 
     public override func viewDidLoad() {
         super.viewDidLoad()
-        // Topo na cor do canal (atrás da barra de status), fundo do rodapé claro.
+        // Topo na cor do canal (atrás da barra de status). Embaixo do chat (atrás do teclado, que é
+        // translúcido, e da barra do sistema), o fundo do widget: o `background_changed` dele.
         applyPrimaryColor()
-        let bottomFill = UIView()
-        bottomFill.backgroundColor = .white
+        bottomFill.backgroundColor = Self.lastBackground ?? .white
         bottomFill.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(bottomFill)
         NSLayoutConstraint.activate([
             bottomFill.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             bottomFill.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            bottomFill.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
+            bottomFill.topAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor),
             bottomFill.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
 
@@ -263,6 +266,11 @@ public final class AtaliaChatViewController: UIViewController {
         case "session_changed":
             // A página trocou de sessão (identify, logout): o reaproveitamento acompanha.
             loadedFor?.session = bridge.string("sessionToken")
+        case "background_changed":
+            if let color = UIColor(ataliaHex: bridge.string("color")) {
+                Self.lastBackground = color
+                bottomFill.backgroundColor = color
+            }
         case "error":
             if bridge.string("command") == nil { spinner.stopAnimating() }
         case "close":

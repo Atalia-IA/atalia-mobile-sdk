@@ -76,6 +76,14 @@ class AtaliaChatView @JvmOverloads constructor(
     /** Canal, origem e sessão com que a página foi carregada: o chat pré-carregado só serve a eles. */
     private var loadedFor: Triple<String, String, String?>? = null
 
+    /**
+     * Fundo do painel do widget (`background_changed`: branco na home, o da conversa nela). A tela do
+     * chat pinta com ele a faixa abaixo do chat. Guardado porque o pré-carregado recebe escondido.
+     */
+    internal var pageBackground: Int? = lastPageBackground
+        private set
+    internal var onPageBackgroundChanged: ((Int) -> Unit)? = null
+
     private val bridgeTarget = object : ChatBridgeTarget {
         override fun sendCommand(type: String, payload: JSONObject?) = this@AtaliaChatView.sendCommand(type, payload)
 
@@ -215,6 +223,13 @@ class AtaliaChatView @JvmOverloads constructor(
             // A sessão nova (criada ou trocada pelo widget) passa a ser a desta página.
             "session_changed" -> message.string("sessionToken")?.let { token -> loadedFor = loadedFor?.copy(third = token) }
             "close" -> host?.onCloseRequested()
+            "background_changed" -> message.string("color")
+                ?.let { runCatching { Color.parseColor(it) }.getOrNull() }
+                ?.let { color ->
+                    pageBackground = color
+                    lastPageBackground = color
+                    onPageBackgroundChanged?.invoke(color)
+                }
             "open_url" -> message.string("url")?.let(::openExternal)
             "download" -> message.string("url")?.let { download(it, message.string("filename"), message.string("mimeType")) }
         }
@@ -383,5 +398,8 @@ class AtaliaChatView @JvmOverloads constructor(
         const val READY_FALLBACK_MS = 8_000L
         const val APP_FOREGROUND = "foreground"
         const val APP_BACKGROUND = "background"
+
+        /** Último fundo avisado pelo widget: a próxima tela já nasce com ele. */
+        var lastPageBackground: Int? = null
     }
 }

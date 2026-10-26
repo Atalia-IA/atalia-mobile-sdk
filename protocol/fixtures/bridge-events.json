@@ -32,6 +32,7 @@
       "expect": { "sessionToken": "sdk-session-123456", "identified": true, "externalId": "user-42" }
     },
     { "raw": { "v": 1, "type": "close", "payload": null } },
+    { "raw": { "v": 1, "type": "background_changed", "payload": { "color": "#f4f1ec" } }, "expect": { "color": "#f4f1ec" } },
     { "raw": { "v": 1, "type": "open_url", "payload": { "url": "https://wa.me/5511999999999" } }, "expect": { "url": "https://wa.me/5511999999999" } },
     {
       "raw": { "v": 1, "type": "download", "payload": { "url": "https://chat.atalia.ai/media/x.pdf", "filename": "boleto.pdf", "mimeType": "application/pdf" } },
