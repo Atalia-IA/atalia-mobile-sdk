@@ -1,6 +1,7 @@
 package ai.atalia.chat
 
 import ai.atalia.chat.internal.AtaliaCore
+import ai.atalia.chat.internal.AtaliaLog
 import ai.atalia.chat.internal.AtaliaNotifications
 import ai.atalia.chat.internal.AtaliaStateHolder
 import ai.atalia.chat.internal.ChannelBranding
@@ -36,7 +37,7 @@ import java.util.Locale
  * ```
  */
 object Atalia {
-    const val SDK_VERSION = "0.4.0"
+    const val SDK_VERSION = "0.4.1"
 
     private val state = AtaliaStateHolder()
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -75,6 +76,8 @@ object Atalia {
     @JvmOverloads
     fun configure(context: Context, channelToken: String, options: AtaliaOptions = AtaliaOptions()) {
         val appContext = context.applicationContext
+        AtaliaLog.enabled = options.debug
+        AtaliaLog.i("configure: ${options.baseUrl} · SDK $SDK_VERSION")
         val created = AtaliaCore(
             channelToken = channelToken,
             options = options,
@@ -92,9 +95,9 @@ object Atalia {
             created.loadBranding()
             pendingPushToken?.let { token ->
                 pendingPushToken = null
-                runCatching { created.setPushToken(token) }
+                runCatching { created.setPushToken(token) }.onFailure { AtaliaLog.w("push: falha ao registrar o aparelho", it) }
             }
-            runCatching { created.registerPushTokenIfNeeded() }
+            runCatching { created.registerPushTokenIfNeeded() }.onFailure { AtaliaLog.w("push: falha ao registrar o aparelho", it) }
         }
         runOnMain {
             // O observador do processo dispara onStart na hora em que é registrado (app já aberto)
@@ -155,7 +158,9 @@ object Atalia {
             pendingPushToken = token
             return
         }
-        scope.launch { runCatching { current.setPushToken(token) } }
+        scope.launch {
+            runCatching { current.setPushToken(token) }.onFailure { AtaliaLog.w("push: falha ao registrar o aparelho", it) }
+        }
     }
 
     /** Tira o aparelho da Atalia (o usuário desligou as notificações do atendimento no app). */
@@ -180,9 +185,16 @@ object Atalia {
         val payload = PushPayload.parse(data) ?: return false
         val current = core
         current?.let { scope.launch { runCatching { it.refreshUnread() } } }
-        if (current?.shouldShowNotification() == false) return true
+        if (current?.shouldShowNotification() == false) {
+            AtaliaLog.i("push: conversa ${payload.conversationId} com o chat na tela, notificação não mostrada")
+            return true
+        }
         val icon = current?.options?.notificationIcon ?: R.drawable.atalia_ic_chat
-        AtaliaNotifications.show(context.applicationContext, payload, title, body, icon)
+        if (AtaliaNotifications.show(context.applicationContext, payload, title, body, icon)) {
+            AtaliaLog.i("push: notificação mostrada (conversa ${payload.conversationId})")
+        } else {
+            AtaliaLog.w("push: o sistema não mostrou a notificação (permissão POST_NOTIFICATIONS negada, notificações do app desligadas ou notificationIcon recusado)")
+        }
         return true
     }
 
@@ -199,7 +211,11 @@ object Atalia {
         @Suppress("DEPRECATION")
         val data = extras.keySet().associateWith { key -> extras.get(key)?.toString() }
         val payload = PushPayload.parse(data) ?: return false
-        if (core == null) return false
+        if (core == null) {
+            AtaliaLog.w("push: toque na notificação antes do Atalia.configure (chame no Application.onCreate)")
+            return false
+        }
+        AtaliaLog.i("push: toque na notificação, abrindo a conversa ${payload.conversationId}")
         // Não reabrir o chat quando a activity for recriada (rotação, volta do fundo).
         intent.removeExtra("atalia")
         if (payload.conversationId != null) openConversation(activity, payload.conversationId) else open(activity)

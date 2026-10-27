@@ -12,11 +12,13 @@ import UserNotifications
 /// ```
 @MainActor
 public enum Atalia {
-    public nonisolated static let sdkVersion = "0.4.0"
+    public nonisolated static let sdkVersion = "0.4.1"
 
     /// Chame uma vez, no início do app (ex.: `application(_:didFinishLaunchingWithOptions:)`).
     /// O token do canal fica em Configurações › Canais › Webchat, no painel da Atalia.
     public static func configure(channelToken: String, options: AtaliaOptions = AtaliaOptions()) {
+        AtaliaLog.enabled = options.debug
+        AtaliaLog.info("configure: \(options.baseURL.absoluteString) · SDK \(sdkVersion)")
         AtaliaCore.shared.configure(channelToken: channelToken, options: options)
     }
 
@@ -94,9 +96,13 @@ public enum Atalia {
     /// nele); senão banner, lista, som e badge.
     /// - Returns: nil quando a notificação não é da Atalia (trate como as suas).
     public nonisolated static func presentationOptions(for notification: UNNotification) -> UNNotificationPresentationOptions? {
-        guard PushPayload(notification.request.content.userInfo) != nil else { return nil }
+        guard let payload = PushPayload(notification.request.content.userInfo) else { return nil }
         Task { @MainActor in _ = try? await AtaliaCore.shared.refreshUnread() }
-        return ChatPresence.shared.isVisible ? [] : [.banner, .list, .sound, .badge]
+        let visible = ChatPresence.shared.isVisible
+        AtaliaLog.info(visible
+            ? "push: conversa \(payload.conversationId.map(String.init) ?? "?") com o chat na tela, notificação não mostrada"
+            : "push: notificação recebida com o app aberto (conversa \(payload.conversationId.map(String.init) ?? "?")), mostrando banner")
+        return visible ? [] : [.banner, .list, .sound, .badge]
     }
 
     /// Toque na notificação (`userNotificationCenter(_:didReceive:withCompletionHandler:)`): abre
@@ -106,7 +112,11 @@ public enum Atalia {
     public nonisolated static func handleNotificationTap(_ userInfo: [AnyHashable: Any]) -> Bool {
         guard let payload = PushPayload(userInfo) else { return false }
         Task { @MainActor in
-            guard AtaliaCore.shared.configuration != nil else { return }
+            guard AtaliaCore.shared.configuration != nil else {
+                AtaliaLog.warn("push: toque na notificação antes do Atalia.configure (chame no didFinishLaunchingWithOptions)")
+                return
+            }
+            AtaliaLog.info("push: toque na notificação, abrindo a conversa \(payload.conversationId.map(String.init) ?? "?")")
             presentWhenActive(conversationId: payload.conversationId)
         }
         return true

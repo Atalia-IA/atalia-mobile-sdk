@@ -1,5 +1,6 @@
 package ai.atalia.chat
 
+import ai.atalia.chat.internal.AtaliaLog
 import android.Manifest
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
@@ -81,6 +82,10 @@ class AtaliaChatActivity : ComponentActivity(), AtaliaChatView.Host {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val core = Atalia.coreOrNull() ?: run {
+            // Volta do fundo depois que o sistema matou o processo: sem configure no Application.onCreate
+            // o SDK não existe aqui e o chat fecha. O log não aparece nesse caso (configure liga o log),
+            // por isso o aviso vai direto pelo Log.
+            android.util.Log.w(AtaliaLog.TAG, "chat fechado: Atalia.configure ainda não foi chamado. Chame no Application.onCreate, não numa Activity")
             finish()
             return
         }

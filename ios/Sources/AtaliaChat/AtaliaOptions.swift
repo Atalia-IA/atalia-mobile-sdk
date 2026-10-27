@@ -20,7 +20,9 @@ public struct AtaliaOptions {
     /// Mostra o botão "Fechar" no chat. Desligue quando o chat for uma aba do app.
     public var closeButton: Bool
     public var presentationStyle: PresentationStyle
-    /// Permite inspecionar o WebView pelo Safari (iOS 16.4+). Nunca em produção.
+    /// Permite inspecionar o WebView pelo Safari (iOS 16.4+) e liga o registro do SDK (subsystem
+    /// `ai.atalia.chat` no console do Xcode e no app Console): registro do aparelho no push,
+    /// notificações recebidas e ciclo de vida do chat. Nunca em produção.
     public var debug: Bool
     /// Com o push ligado, o número no ícone do app acompanha as não lidas da Atalia. Desligue se
     /// o app tem contador próprio no ícone: aí nem o SDK nem o push da Atalia mexem no número.

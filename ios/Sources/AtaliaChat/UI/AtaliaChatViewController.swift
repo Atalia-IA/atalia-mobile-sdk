@@ -311,9 +311,12 @@ public final class AtaliaChatViewController: UIViewController {
     private func observeAppLifecycle() {
         let center = NotificationCenter.default
         lifecycleObservers.append(center.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { [weak self] _ in
+            // Esperado, não é falha: sem fechar a conexão a Atalia acharia que o visitante segue no chat e não mandaria push.
+            AtaliaLog.info("chat: app em segundo plano, conexão fechada de propósito (libera o push)")
             Task { @MainActor [weak self] in self?.notifyAppState("background") }
         })
         lifecycleObservers.append(center.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) { [weak self] _ in
+            AtaliaLog.info("chat: app em primeiro plano, reconectando")
             Task { @MainActor [weak self] in self?.notifyAppState("foreground") }
         })
     }
@@ -380,6 +383,7 @@ public final class AtaliaChatViewController: UIViewController {
     // MARK: Erro de carregamento
 
     private func showError() {
+        AtaliaLog.warn("chat: a página do chat não carregou (sem rede ou baseURL errada)")
         spinner.stopAnimating()
         guard errorView == nil else { return }
         let label = UILabel()

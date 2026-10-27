@@ -9,7 +9,9 @@ import android.net.Uri
  * @property baseUrl Origem do chat. Troque só para homologação ou para o domínio próprio do canal.
  * @property customDomain `true` quando [baseUrl] é o domínio próprio vinculado ao canal (o chat fica em `/`).
  * @property closeButton Mostra o botão "Fechar". Desligue quando o chat for uma aba do app.
- * @property debug Permite inspecionar o WebView pelo `chrome://inspect`. Nunca em produção.
+ * @property debug Permite inspecionar o WebView pelo `chrome://inspect` e liga o registro do SDK no
+ *   Logcat (tag `AtaliaChat`): registro do aparelho no push, notificações recebidas e ciclo de vida
+ *   do chat. Nunca em produção.
  * @property urlHandler Decide como abrir links tocados no chat. Devolva `true` se o app tratou;
  *   `false` abre pelo sistema (navegador, discador, WhatsApp).
  * @property notificationIcon Ícone pequeno (monocromático) das notificações do chat. Sem ele, o

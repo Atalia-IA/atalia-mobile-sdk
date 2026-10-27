@@ -73,7 +73,7 @@ Sem a do microfone, o SDK nega o pedido e o chat mostra um aviso: o app não fec
 
 ```kotlin title="build.gradle.kts"
 dependencies {
-    implementation("ai.atalia:chat:0.4.0")
+    implementation("ai.atalia:chat:0.4.1")
 }
 ```
 

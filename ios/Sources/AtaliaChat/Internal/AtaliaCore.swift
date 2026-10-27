@@ -234,10 +234,15 @@ final class AtaliaCore {
     }
 
     private func performPushRegistration() async {
-        guard let config = configuration,
-              let push = config.store.loadPushToken(),
-              var session = try? await ensureSession()
-        else { return }
+        guard let config = configuration else { return }
+        guard let push = config.store.loadPushToken() else {
+            AtaliaLog.info("push: nenhum token ainda (o app não chamou Atalia.setPushToken nem setAPNsToken)")
+            return
+        }
+        guard var session = try? await ensureSession() else {
+            AtaliaLog.warn("push: não foi possível criar a sessão do visitante (sem rede ou token do canal errado)")
+            return
+        }
         if let registeredPush, registeredPush.session == session, registeredPush.token == push.token { return }
 
         var response = try? await config.api.registerPushDevice(sessionToken: session, device: pushDeviceBody(push))
@@ -249,7 +254,14 @@ final class AtaliaCore {
             session = fresh
             response = try? await config.api.registerPushDevice(sessionToken: session, device: pushDeviceBody(push))
         }
-        if response?.isSuccess == true { registeredPush = (session, push.token) }
+        if response?.isSuccess == true {
+            registeredPush = (session, push.token)
+            AtaliaLog.info("push: aparelho registrado na Atalia (\(push.provider), token \(AtaliaLog.mask(push.token)))")
+        } else if let response {
+            AtaliaLog.warn("push: a Atalia recusou o registro do aparelho (HTTP \(response.status)\(response.code.map { " \($0)" } ?? ""))")
+        } else {
+            AtaliaLog.warn("push: falha de rede ao registrar o aparelho")
+        }
     }
 
     private func pushDeviceBody(_ push: StoredPushToken) -> [String: Any] {

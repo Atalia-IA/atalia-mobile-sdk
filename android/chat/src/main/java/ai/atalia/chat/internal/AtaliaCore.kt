@@ -179,7 +179,10 @@ internal class AtaliaCore(
      * o servidor diz ter vencido é trocada por uma nova e o registro é repetido uma vez.
      */
     suspend fun registerPushTokenIfNeeded() = pushMutex.withLock {
-        val token = store.loadPushToken() ?: return@withLock
+        val token = store.loadPushToken() ?: run {
+            AtaliaLog.i("push: nenhum token ainda (o app não chamou Atalia.setPushToken)")
+            return@withLock
+        }
         var session = ensureSession()
         if (registeredPush == session to token) return@withLock
 
@@ -190,7 +193,12 @@ internal class AtaliaCore(
             session = ensureSession()
             response = api.registerPushDevice(session, deviceInfo().put("token", token).put("provider", "fcm"))
         }
-        if (response.isSuccess) registeredPush = session to token
+        if (response.isSuccess) {
+            registeredPush = session to token
+            AtaliaLog.i("push: aparelho registrado na Atalia (token ${AtaliaLog.mask(token)})")
+        } else {
+            AtaliaLog.w("push: a Atalia recusou o registro do aparelho (HTTP ${response.status}${response.code?.let { " $it" } ?: ""})")
+        }
     }
 
     /** Com o chat na tela, a mensagem já aparece nele: notificação seria repetida. */

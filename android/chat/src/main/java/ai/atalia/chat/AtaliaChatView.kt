@@ -1,6 +1,7 @@
 package ai.atalia.chat
 
 import ai.atalia.chat.internal.AtaliaCore
+import ai.atalia.chat.internal.AtaliaLog
 import ai.atalia.chat.internal.BridgeMessage
 import ai.atalia.chat.internal.ChatBridgeTarget
 import ai.atalia.chat.internal.ChatUrl
@@ -160,11 +161,14 @@ class AtaliaChatView @JvmOverloads constructor(
      * avisa a Atalia que o visitante saiu; é o que libera as notificações push.
      */
     fun onAppForeground() {
+        AtaliaLog.i("chat: app em primeiro plano, reconectando")
         webView?.onResume()
         sendCommand("app_state", JSONObject().put("state", APP_FOREGROUND))
     }
 
     fun onAppBackground() {
+        // Esperado, não é falha: sem fechar a conexão a Atalia acharia que o visitante segue no chat e não mandaria push.
+        AtaliaLog.i("chat: app em segundo plano, conexão fechada de propósito (libera o push)")
         sendCommand("app_state", JSONObject().put("state", APP_BACKGROUND))
         webView?.onPause()
     }
@@ -296,6 +300,7 @@ class AtaliaChatView @JvmOverloads constructor(
     // Erro de carregamento
 
     private fun showError() {
+        AtaliaLog.w("chat: a página do chat não carregou (sem rede ou baseUrl errada)")
         progress.visibility = GONE
         if (errorView != null) return
         val padding = (24 * resources.displayMetrics.density).toInt()

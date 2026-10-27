@@ -2,7 +2,14 @@
 
 Versões seguem [SemVer](https://semver.org/lang/pt-BR/). O protocolo do bridge tem versão própria (ver [protocol/README.md](protocol/README.md)).
 
-## Não lançado
+## 0.4.1 (2026-10-27)
+
+Registro do SDK para diagnosticar o push, e correções do botão flutuante e da faixa abaixo do chat.
+
+### Novidades
+
+- Com `debug` ligado, o SDK escreve o que faz no log do aparelho (Android: tag `AtaliaChat` no Logcat; iOS: subsystem `ai.atalia.chat`): registro do token de push na Atalia e o motivo de uma recusa, notificações recebidas e se foram mostradas, toque na notificação e idas do app para o fundo. Antes, uma falha no registro do aparelho passava em silêncio.
+- Android: quando o sistema recria o chat sem o `Atalia.configure` ter rodado (configure numa Activity e o app morto no fundo), o chat fecha como antes, mas agora avisa no Logcat, mesmo sem `debug`.
 
 ### Correções
 
