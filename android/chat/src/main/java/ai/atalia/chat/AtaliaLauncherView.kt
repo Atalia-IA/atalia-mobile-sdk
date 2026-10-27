@@ -31,6 +31,7 @@ import androidx.annotation.ColorInt
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.doOnPreDraw
+import androidx.core.view.updateLayoutParams
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -392,23 +393,26 @@ class AtaliaLauncherView @JvmOverloads constructor(
         subtitle.visibility = if (subtitleText.isBlank()) GONE else VISIBLE
 
         // A pílula fica por trás do círculo: a ponta dela some embaixo dele.
+        // Margens sempre por updateLayoutParams: marginStart/End só viram margem esquerda/direita
+        // quando os parâmetros são reaplicados à view. Mudados no lugar, valiam às vezes, e a
+        // pílula encostava na ponta do círculo com o texto passando por baixo dele.
         val half = circleSize / 2
-        (pill.layoutParams as LayoutParams).apply {
+        pill.updateLayoutParams<LayoutParams> {
             gravity = horizontal or Gravity.CENTER_VERTICAL
             if (start) { marginStart = half; marginEnd = 0 } else { marginEnd = half; marginStart = 0 }
         }
         val near = dp(16)
         val far = half + dp(14)
         if (start) pill.setPadding(far, 0, near, 0) else pill.setPadding(near, 0, far, 0)
-        (halo.layoutParams as LayoutParams).apply {
+        halo.updateLayoutParams<LayoutParams> {
             gravity = horizontal or Gravity.CENTER_VERTICAL
             if (start) { marginStart = -dp(HALO_DP); marginEnd = 0 } else { marginEnd = -dp(HALO_DP); marginStart = 0 }
         }
-        (circle.layoutParams as LayoutParams).gravity = horizontal or Gravity.CENTER_VERTICAL
-        (tab.layoutParams as LayoutParams).gravity = horizontal or Gravity.CENTER_VERTICAL
+        circle.updateLayoutParams<LayoutParams> { gravity = horizontal or Gravity.CENTER_VERTICAL }
+        tab.updateLayoutParams<LayoutParams> { gravity = horizontal or Gravity.CENTER_VERTICAL }
         // Seta para dentro da tela, na parte da aba que aparece.
         chevron.rotation = if (start) 180f else 0f
-        (chevron.layoutParams as LayoutParams).apply {
+        chevron.updateLayoutParams<LayoutParams> {
             val visiblePad = (dp(TAB_WIDTH_DP - EDGE_HIDDEN_DP) - dp(20)) / 2
             gravity = (if (start) Gravity.END else Gravity.START) or Gravity.CENTER_VERTICAL
             if (start) { marginEnd = visiblePad; marginStart = 0 } else { marginStart = visiblePad; marginEnd = 0 }
@@ -423,7 +427,7 @@ class AtaliaLauncherView @JvmOverloads constructor(
         if (unread > 0 && !docked) {
             badge.text = if (unread > 99) "99+" else unread.toString()
             badge.visibility = VISIBLE
-            (badge.layoutParams as LayoutParams).apply {
+            badge.updateLayoutParams<LayoutParams> {
                 gravity = Gravity.TOP or horizontal
                 if (start) { marginStart = circleSize - dp(16); marginEnd = 0 } else { marginEnd = -dp(4); marginStart = 0 }
             }

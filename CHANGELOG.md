@@ -6,6 +6,7 @@ Versões seguem [SemVer](https://semver.org/lang/pt-BR/). O protocolo do bridge 
 
 ### Correções
 
+- Android: no botão flutuante, o título podia passar por baixo do círculo ("Fale conosc") e o número de não lidas não aparecer. As margens eram mudadas sem reaplicar o layout, então às vezes não valiam.
 - A faixa abaixo do chat (atrás do teclado e da barra do sistema) ficava branca e, com o teclado aberto no iOS, na cor do canal. Agora acompanha o fundo do chat: branca na home, o fundo da conversa nela. O widget avisa a cor pelo evento novo do bridge `background_changed`.
 
 ## 0.4.0 (2026-10-25)

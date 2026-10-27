@@ -3,5 +3,11 @@
 
     <!-- Só no build de debug: permite apontar o exemplo para um servidor local sem HTTPS
          (no emulador, o computador é http://10.0.2.2). O release segue só com HTTPS. -->
-    <application android:usesCleartextTraffic="true" />
+    <application android:usesCleartextTraffic="true">
+        <!-- Loja fictícia para gravar os vídeos da documentação (DemoActivity.kt). -->
+        <activity
+            android:name=".DemoActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.Material.Light.NoActionBar" />
+    </application>
 </manifest>
