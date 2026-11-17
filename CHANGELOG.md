@@ -2,6 +2,12 @@
 
 Versões seguem [SemVer](https://semver.org/lang/pt-BR/). O protocolo do bridge tem versão própria (ver [protocol/README.md](protocol/README.md)).
 
+## Não lançado
+
+### Novidades
+
+- React Native: links do site do próprio app abrem dentro do app. A opção nova `appLinkHosts` do `configure` lista os sites (subdomínios entram junto); ao tocar num link deles no chat, o chat fecha e chega o evento novo `linkPressed` com a URL, para o app navegar até a tela. Os outros links seguem abrindo pelo sistema. É o `urlHandler` dos SDKs nativos, que não tinha como ser chamado pelo JavaScript. Com o encurtador de links da Atalia ligado, o chat entrega ao app o endereço de destino (com os parâmetros de rastreio), não o link curto; isso vale também para o `urlHandler` dos SDKs nativos e não depende da versão do SDK.
+
 ## 0.4.1 (2026-10-27)
 
 Registro do SDK para diagnosticar o push, e correções do botão flutuante e da faixa abaixo do chat.

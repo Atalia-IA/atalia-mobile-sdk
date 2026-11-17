@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 
 import Native from './AtaliaChatModule';
+import { normalizeAppLinkHosts } from './links';
 import { isAtaliaNotification, notificationData, notificationText } from './notifications';
 import type {
   AtaliaContact,
@@ -25,7 +26,7 @@ export type AtaliaSubscription = { remove(): void };
  * só é necessária para trocar as opções.
  */
 export function configure(channelToken: string, options: AtaliaOptions = {}): void {
-  Native.configure(channelToken, options);
+  Native.configure(channelToken, { ...options, appLinkHosts: normalizeAppLinkHosts(options.appLinkHosts) });
 }
 
 /** Abre o chat por cima do app. */
