@@ -9,6 +9,7 @@ struct ConfigureRecord: Record {
     @Field var presentationStyle: String?
     @Field var debug: Bool?
     @Field var appBadge: Bool?
+    @Field var appLinkHosts: [String]?
 }
 
 /// Contato identificado, como vai para o JavaScript.
@@ -31,6 +32,7 @@ struct LauncherRecord: Record {
     @Field var draggable: Bool?
     @Field var dockable: Bool?
     @Field var preloadChat: Bool?
+    @Field var popups: Bool?
 }
 
 /// Ponte entre o JavaScript e o SDK iOS (o mesmo do Swift Package Manager, compilado neste pod).
@@ -38,6 +40,8 @@ struct LauncherRecord: Record {
 public class AtaliaChatModule: Module {
     private var listener: AtaliaListenerToken?
     private var launcher: AtaliaLauncherView?
+    /// O `Atalia.urlHandler` atual foi posto por este módulo (e não pelo código nativo do app).
+    private var ownsURLHandler = false
 
     public func definition() -> ModuleDefinition {
         Name("AtaliaChat")
@@ -68,7 +72,11 @@ public class AtaliaChatModule: Module {
             if record.presentationStyle == "fullScreen" { options.presentationStyle = .fullScreen }
             if let debug = record.debug { options.debug = debug }
             if let appBadge = record.appBadge { options.appBadge = appBadge }
-            Task { @MainActor in Atalia.configure(channelToken: channelToken, options: options) }
+            let hosts = record.appLinkHosts ?? []
+            Task { @MainActor in
+                Atalia.configure(channelToken: channelToken, options: options)
+                self.installAppLinkHandler(hosts)
+            }
         }
 
         Function("open") {
@@ -152,12 +160,42 @@ public class AtaliaChatModule: Module {
             }
         }
 
+        // Tela do app em que o visitante está (regras por página).
+        Function("setPage") { (url: String?) in
+            Task { @MainActor in Atalia.setPage(url) }
+        }
+
         Function("hideLauncher") {
             Task { @MainActor in
                 self.launcher?.removeFromSuperview()
                 self.launcher = nil
             }
         }
+    }
+
+    /// Links dos sites do próprio app (`appLinkHosts`): em vez do Safari, o chat fecha e o
+    /// JavaScript recebe `linkPressed` para navegar. Sem ninguém ouvindo os eventos, o link segue
+    /// para o sistema: fechar o chat sem o app navegar deixaria o visitante sem resposta.
+    @MainActor
+    private func installAppLinkHandler(_ hosts: [String]) {
+        guard !hosts.isEmpty else {
+            if ownsURLHandler { Atalia.urlHandler = nil }
+            ownsURLHandler = false
+            return
+        }
+        ownsURLHandler = true
+        Atalia.urlHandler = { [weak self] url in
+            guard let self, self.listener != nil, Self.isAppLink(url, hosts: hosts) else { return false }
+            Atalia.dismiss()
+            self.sendEvent("onEvent", ["type": "linkPressed", "url": url.absoluteString])
+            return true
+        }
+    }
+
+    private static func isAppLink(_ url: URL, hosts: [String]) -> Bool {
+        guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https",
+              let host = url.host?.lowercased() else { return false }
+        return hosts.contains { host == $0 || host.hasSuffix("." + $0) }
     }
 
     private static func launcherOptions(_ record: LauncherRecord) -> AtaliaLauncherOptions {
@@ -181,6 +219,7 @@ public class AtaliaChatModule: Module {
         options.draggable = record.draggable ?? false
         if let dockable = record.dockable { options.dockable = dockable }
         if let preloadChat = record.preloadChat { options.preloadChat = preloadChat }
+        if let popups = record.popups { options.popups = popups }
         return options
     }
 

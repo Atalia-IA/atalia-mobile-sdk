@@ -34,6 +34,36 @@ final class BridgeMessageTests: XCTestCase {
         }
     }
 
+    func testPopupMessagesMatchFixture() throws {
+        let fixture = try Fixtures.json("bridge-events.json")
+        let cases = try XCTUnwrap(fixture["popupMessages"] as? [[String: Any]])
+        XCTAssertFalse(cases.isEmpty)
+        for item in cases {
+            let message = try XCTUnwrap(BridgeMessage(body: Fixtures.raw(item["raw"]!)), "não decodificou \(item["raw"]!)")
+            let expect = try XCTUnwrap(item["expect"] as? [String: Any])
+            // Mensagem da camada dos balões nunca vira evento público.
+            XCTAssertNil(message.publicEvent, "\(message.type) não é evento público")
+            switch message.type {
+            case "popup_changed":
+                let change = try XCTUnwrap(message.popupChange)
+                XCTAssertEqual(change.visible, expect["visible"] as? Bool)
+                XCTAssertEqual(change.kind, expect["kind"] as? String)
+                XCTAssertEqual(change.width, expect["width"] as? Int)
+                XCTAssertEqual(change.height, expect["height"] as? Int)
+                XCTAssertNil(message.openChat)
+            case "open_chat":
+                let request = try XCTUnwrap(message.openChat)
+                XCTAssertEqual(request.conversationId, expect["conversationId"] as? Int)
+                XCTAssertEqual(request.noticeRuleId, expect["noticeRuleId"] as? Int)
+                XCTAssertEqual(request.noticeButton, expect["noticeButton"] as? Int)
+                XCTAssertEqual(request.notice?.ruleId, expect["noticeRuleId"] as? Int)
+                XCTAssertNil(message.popupChange)
+            default:
+                XCTFail("tipo inesperado na fixture: \(message.type)")
+            }
+        }
+    }
+
     func testUnknownAndMalformedMessagesAreIgnored() throws {
         let fixture = try Fixtures.json("bridge-events.json")
         let cases = try XCTUnwrap(fixture["ignored"] as? [Any])

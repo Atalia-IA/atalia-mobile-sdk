@@ -12,6 +12,9 @@ public final class AtaliaChatViewController: UIViewController {
     public var onClose: (() -> Void)?
 
     private let initialConversationId: Int?
+    /// Aviso a abrir no primeiro carregamento (toque no balão). Sai quando a página fica pronta:
+    /// um recarregamento não abre o aviso de novo.
+    private var initialNotice: ChatNotice?
     private var webView: WKWebView?
     private var webViewTop: NSLayoutConstraint?
     private let bottomFill = UIView()
@@ -47,11 +50,12 @@ public final class AtaliaChatViewController: UIViewController {
     }
 
     public convenience init(conversationId: Int? = nil) {
-        self.init(conversationId: conversationId, preloaded: false)
+        self.init(conversationId: conversationId, notice: nil, preloaded: false)
     }
 
-    init(conversationId: Int?, preloaded: Bool) {
+    init(conversationId: Int?, notice: ChatNotice? = nil, preloaded: Bool) {
         initialConversationId = conversationId
+        initialNotice = notice
         self.preloaded = preloaded
         super.init(nibName: nil, bundle: nil)
     }
@@ -122,8 +126,12 @@ public final class AtaliaChatViewController: UIViewController {
     }
 
     /// O chat pré-carregado vai aparecer: a página sai do segundo plano (conecta e marca as lidas).
-    func activate(conversationId: Int?) {
-        if let conversationId { openConversation(conversationId) }
+    func activate(conversationId: Int?, notice: ChatNotice? = nil) {
+        if let conversationId {
+            openConversation(conversationId)
+        } else if let notice {
+            openNotice(notice)
+        }
         setPageState("foreground")
     }
 
@@ -169,6 +177,11 @@ public final class AtaliaChatViewController: UIViewController {
         sendCommand("open_conversation", payload: ["conversationId": conversationId])
     }
 
+    /// Abre no aviso de uma regra com o chat já carregado (toque no balão do aviso).
+    func openNotice(_ notice: ChatNotice) {
+        sendCommand("open_notice", payload: ["ruleId": notice.ruleId, "button": notice.button ?? NSNull()])
+    }
+
     func close(animated: Bool = true) {
         if let onClose {
             onClose()
@@ -186,6 +199,7 @@ public final class AtaliaChatViewController: UIViewController {
 
         let contentController = WKUserContentController()
         contentController.add(WeakScriptMessageHandler(target: self), name: "atalia")
+        AtaliaCore.shared.register(self)
         let configuration = WKWebViewConfiguration()
         configuration.userContentController = contentController
         configuration.allowsInlineMediaPlayback = true
@@ -228,6 +242,8 @@ public final class AtaliaChatViewController: UIViewController {
         fragment.conversationId = conversationId
         fragment.closeButton = config.options.closeButton
         fragment.background = background
+        fragment.page = AtaliaCore.shared.page
+        fragment.notice = initialNotice
         loadedFor = currentLoadKey()
         let url = ChatURLBuilder.url(
             baseURL: config.options.baseURL,
@@ -244,6 +260,7 @@ public final class AtaliaChatViewController: UIViewController {
         downloadTask?.cancel()
         lifecycleObservers.forEach(NotificationCenter.default.removeObserver)
         lifecycleObservers.removeAll()
+        AtaliaCore.shared.unregister(self)
         webView?.configuration.userContentController.removeScriptMessageHandler(forName: "atalia")
         webView?.navigationDelegate = nil
         webView?.uiDelegate = nil
@@ -252,15 +269,13 @@ public final class AtaliaChatViewController: UIViewController {
 
     // MARK: Bridge
 
-    fileprivate func receive(_ message: WKScriptMessage) {
-        guard message.frameInfo.isMainFrame,
-              isTrusted(message.frameInfo.securityOrigin),
-              let bridge = BridgeMessage(body: message.body)
-        else { return }
+    func receive(_ message: WKScriptMessage) {
+        guard let bridge = ChatWeb.bridgeMessage(from: message) else { return }
 
         switch bridge.type {
         case "ready":
             isReady = true
+            initialNotice = nil
             spinner.stopAnimating()
             flushPendingCommands()
         case "session_changed":
@@ -297,13 +312,11 @@ public final class AtaliaChatViewController: UIViewController {
     }
 
     private func isTrusted(_ origin: WKSecurityOrigin) -> Bool {
-        guard let base = AtaliaCore.shared.configuration?.options.baseURL else { return false }
-        return origin.protocol == base.scheme && origin.host == base.host && origin.port == (base.port ?? 0)
+        ChatWeb.isTrusted(origin)
     }
 
     private func isTrusted(_ url: URL) -> Bool {
-        guard let base = AtaliaCore.shared.configuration?.options.baseURL else { return false }
-        return url.scheme == base.scheme && url.host == base.host && url.port == base.port
+        ChatWeb.isTrusted(url)
     }
 
     // MARK: Ciclo de vida do app
@@ -345,8 +358,7 @@ public final class AtaliaChatViewController: UIViewController {
     // MARK: Links e arquivos
 
     private func openExternal(_ url: URL) {
-        if let handler = Atalia.urlHandler, handler(url) { return }
-        UIApplication.shared.open(url)
+        ChatWeb.openExternal(url)
     }
 
     private func download(_ url: URL, filename: String?) {
@@ -431,12 +443,11 @@ public final class AtaliaChatViewController: UIViewController {
     }
 
     static func commandScript(_ type: String, payload: [String: Any]?) -> String {
-        var command: [String: Any] = ["type": type]
-        if let payload { command["payload"] = payload }
-        let json = (try? JSONSerialization.data(withJSONObject: command)).flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
-        return "window.AtaliaChat && window.AtaliaChat._native && window.AtaliaChat._native(\(json));"
+        ChatWeb.commandScript(type, payload: payload)
     }
 }
+
+extension AtaliaChatViewController: BridgeMessageReceiver {}
 
 extension AtaliaChatViewController: ChatBridgeTarget {
     func primaryColorDidChange() {
@@ -550,21 +561,6 @@ extension AtaliaChatViewController: WKUIDelegate {
         alert.addAction(UIAlertAction(title: "Cancelar", style: .cancel) { _ in completionHandler(false) })
         alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in completionHandler(true) })
         present(alert, animated: true)
-    }
-}
-
-/// O `WKUserContentController` retém o handler; o proxy fraco evita o ciclo com a tela.
-private final class WeakScriptMessageHandler: NSObject, WKScriptMessageHandler {
-    weak var target: AtaliaChatViewController?
-
-    init(target: AtaliaChatViewController) {
-        self.target = target
-    }
-
-    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-        MainActor.assumeIsolated {
-            target?.receive(message)
-        }
     }
 }
 

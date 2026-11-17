@@ -45,6 +45,12 @@ await Atalia.identify(jwt);
 
 // Botão flutuante por cima de todas as telas.
 Atalia.showLauncher({ bottomMargin: 72 });
+
+// Links do seu site abrem numa tela do app, não no navegador.
+Atalia.configure('<token-do-canal>', { appLinkHosts: ['exemplo.com.br'] });
+Atalia.addListener((event) => {
+  if (event.type === 'linkPressed') router.push(new URL(event.url).pathname);
+});
 ```
 
 ## Documentação

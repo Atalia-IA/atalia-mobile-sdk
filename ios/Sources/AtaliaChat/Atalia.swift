@@ -47,6 +47,15 @@ public enum Atalia {
         try await AtaliaCore.shared.refreshUnread()
     }
 
+    /// Informa a tela do app em que o visitante está: a URL equivalente do site
+    /// (`https://exemplo.com.br/cursos/10`) ou um caminho (`/cursos/10`). É o que as regras por
+    /// página do canal comparam para mostrar avisos e mudar a abertura do chat. Chame a cada troca
+    /// de tela; `nil` limpa (só valem as regras de "todas as páginas"). Vale para o chat já
+    /// carregado, para os balões do botão flutuante e para as próximas aberturas.
+    public static func setPage(_ url: String?) {
+        AtaliaCore.shared.setPage(url)
+    }
+
     @discardableResult
     public static func addListener(_ listener: @escaping (AtaliaEvent) -> Void) -> AtaliaListenerToken {
         AtaliaCore.shared.addListener(listener)
@@ -151,12 +160,27 @@ public enum Atalia {
     /// Abre o chat por cima da tela atual. Com `conversationId`, abre direto nessa conversa
     /// (toque numa notificação). Se o chat já estiver aberto, só troca de conversa.
     public static func present(from presenter: UIViewController? = nil, conversationId: Int? = nil, animated: Bool = true) {
+        present(from: presenter, conversationId: conversationId, notice: nil, animated: animated)
+    }
+
+    /// Abertura pedida pela camada dos balões (`open_chat`): na conversa, no aviso ou do jeito padrão.
+    static func present(_ request: OpenChatRequest) {
+        present(from: nil, conversationId: request.conversationId, notice: request.conversationId == nil ? request.notice : nil, animated: true)
+    }
+
+    /// Com `notice`, abre no aviso da regra: comando `open_notice` para o chat já carregado (aberto
+    /// ou pré-carregado), ou `notice` no fragmento de um carregamento novo.
+    private static func present(from presenter: UIViewController?, conversationId: Int?, notice: ChatNotice?, animated: Bool) {
         guard let config = AtaliaCore.shared.configuration else {
             assertionFailure("Atalia.configure(channelToken:) não foi chamado")
             return
         }
         if let active = AtaliaCore.shared.activeChat as? AtaliaChatViewController {
-            if let conversationId { active.openConversation(conversationId) }
+            if let conversationId {
+                active.openConversation(conversationId)
+            } else if let notice {
+                active.openNotice(notice)
+            }
             return
         }
         guard let host = presenter ?? topViewController() else { return }
@@ -164,11 +188,12 @@ public enum Atalia {
         if let prepared = ChatPrewarm.take() {
             // Pré-carregado pelo botão flutuante: já sai do segundo plano durante a animação.
             chat = prepared
-            chat.activate(conversationId: conversationId)
+            chat.activate(conversationId: conversationId, notice: notice)
         } else {
-            chat = AtaliaChatViewController(conversationId: conversationId)
+            chat = AtaliaChatViewController(conversationId: conversationId, notice: notice, preloaded: false)
             chat.recyclable = true
         }
+        AtaliaCore.shared.chatWillOpen()
         if config.options.presentationStyle == .pageSheet {
             chat.modalPresentationStyle = .pageSheet
             if let sheet = chat.sheetPresentationController {

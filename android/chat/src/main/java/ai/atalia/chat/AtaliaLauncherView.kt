@@ -67,6 +67,12 @@ data class AtaliaLauncherOptions(
     val preloadChat: Boolean = true,
     /** O que o toque faz. Nulo = [Atalia.open]. */
     val onClick: (() -> Unit)? = null,
+    /**
+     * Mostra acima do botão os balões do chat fechado, como no site: o aviso das regras por página
+     * (ver [Atalia.setPage]), a mensagem nova e as boas-vindas. O toque no balão abre o chat.
+     * Precisa do botão numa tela de activity.
+     */
+    val popups: Boolean = true,
 ) {
     enum class Side { START, END }
 
@@ -106,6 +112,7 @@ class AtaliaLauncherView @JvmOverloads constructor(
             field = value
             if (state == State.DOCKED) undock(animate = false)
             expand()
+            syncPopupLayer()
         }
 
     private enum class State { EXPANDED, CIRCLE, DOCKED }
@@ -144,6 +151,14 @@ class AtaliaLauncherView @JvmOverloads constructor(
     private var systemBars = WindowInsetsCompat.CONSUMED.getInsets(WindowInsetsCompat.Type.systemBars())
 
     private val collapseRunnable = Runnable { collapse() }
+
+    /** Camada dos balões desta tela, enquanto o botão está nela e [AtaliaLauncherOptions.popups] está ligado. */
+    private var popupLayer: AtaliaPopupLayer? = null
+    private val popupLayerRunnable = Runnable { syncPopupLayer() }
+
+    /** Para a camada dos balões se alinhar ao botão. */
+    internal val currentSide: AtaliaLauncherOptions.Side get() = side
+    internal val buttonSize: Int get() = circleSize
 
     init {
         clipChildren = false
@@ -254,6 +269,9 @@ class AtaliaLauncherView @JvmOverloads constructor(
             preloadRegistered = true
             ChatPrewarm.launcherAttached(context)
         }
+        // Depois de a tela terminar de montar: a camada entra como irmã do botão, e mexer nos
+        // filhos de quem ainda está anexando os seus não é seguro.
+        mainHandler.post(popupLayerRunnable)
         scheduleCollapse()
     }
 
@@ -261,11 +279,26 @@ class AtaliaLauncherView @JvmOverloads constructor(
         scope?.cancel()
         scope = null
         mainHandler.removeCallbacks(collapseRunnable)
+        mainHandler.removeCallbacks(popupLayerRunnable)
+        removePopupLayer()
         if (preloadRegistered) {
             preloadRegistered = false
             ChatPrewarm.launcherDetached()
         }
         super.onDetachedFromWindow()
+    }
+
+    private fun syncPopupLayer() {
+        if (!isAttachedToWindow || !options.popups) return removePopupLayer()
+        if (popupLayer == null) popupLayer = AtaliaPopupLayer.attach(this)
+    }
+
+    /** O WebView é destruído na hora; a view sai da tela no ciclo seguinte (a tela pode estar desmontando os filhos). */
+    private fun removePopupLayer() {
+        val layer = popupLayer ?: return
+        popupLayer = null
+        layer.destroy()
+        mainHandler.post { (layer.parent as? ViewGroup)?.removeView(layer) }
     }
 
     // Estados

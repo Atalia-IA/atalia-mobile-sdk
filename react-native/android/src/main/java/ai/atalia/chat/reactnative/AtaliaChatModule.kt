@@ -6,8 +6,13 @@ import ai.atalia.chat.AtaliaException
 import ai.atalia.chat.AtaliaLauncherOptions
 import ai.atalia.chat.AtaliaListener
 import ai.atalia.chat.AtaliaOptions
+import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
 import android.graphics.Color
+import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.functions.Queues
@@ -23,6 +28,7 @@ class ConfigureRecord : Record {
     @Field val closeButton: Boolean? = null
     @Field val presentationStyle: String? = null
     @Field val debug: Boolean? = null
+    @Field val appLinkHosts: List<String>? = null
 }
 
 /** Opções do botão flutuante, como chegam do JavaScript. */
@@ -38,10 +44,16 @@ class LauncherRecord : Record {
     @Field val draggable: Boolean? = null
     @Field val dockable: Boolean? = null
     @Field val preloadChat: Boolean? = null
+    @Field val popups: Boolean? = null
 }
 
 /** Ponte entre o JavaScript e o SDK Android (`ai.atalia:chat`). */
 class AtaliaChatModule : Module() {
+    private companion object {
+        /** Pelo nome: o tipo herda de uma classe do androidx que este módulo não tem no classpath. */
+        const val CHAT_ACTIVITY = "ai.atalia.chat.AtaliaChatActivity"
+    }
+
     private var listener: AtaliaListener? = null
 
     private val context: Context
@@ -75,6 +87,7 @@ class AtaliaChatModule : Module() {
                     closeButton = record.closeButton ?: true,
                     debug = record.debug ?: false,
                     notificationIcon = AtaliaChatConfig.notificationIcon(AtaliaChatConfig.metaData(app)),
+                    urlHandler = appLinkHandler(record.appLinkHosts.orEmpty()),
                     presentation = if (record.presentationStyle == "fullScreen") {
                         AtaliaOptions.Presentation.FULL_SCREEN
                     } else {
@@ -162,11 +175,48 @@ class AtaliaChatModule : Module() {
             activity.runOnUiThread { Atalia.showLauncher(activity, options) }
         }
 
+        // Tela do app em que o visitante está (regras por página). O SDK fala com os WebViews: thread principal.
+        Function("setPage") { url: String? ->
+            Handler(Looper.getMainLooper()).post { Atalia.setPage(url) }
+        }
+
         Function("hideLauncher") {
             appContext.currentActivity?.let { activity ->
                 activity.runOnUiThread { Atalia.hideLauncher(activity) }
             }
         }
+    }
+
+    /**
+     * Links dos sites do próprio app (`appLinkHosts`): em vez do navegador, o chat fecha e o
+     * JavaScript recebe `linkPressed` para navegar. Sem ninguém ouvindo os eventos, o link segue
+     * para o sistema: fechar o chat sem o app navegar deixaria o visitante sem resposta.
+     */
+    private fun appLinkHandler(hosts: List<String>): ((Context, Uri) -> Boolean)? {
+        if (hosts.isEmpty()) return null
+        return handler@{ context, uri ->
+            if (listener == null || !isAppLink(uri, hosts)) return@handler false
+            val sent = runCatching { sendEvent("onEvent", mapOf("type" to "linkPressed", "url" to uri.toString())) }.isSuccess
+            if (sent) chatActivity(context)?.finish()
+            sent
+        }
+    }
+
+    private fun isAppLink(uri: Uri, hosts: List<String>): Boolean {
+        val scheme = uri.scheme?.lowercase()
+        if (scheme != "http" && scheme != "https") return false
+        val host = uri.host?.lowercase() ?: return false
+        return hosts.any { host == it || host.endsWith(".$it") }
+    }
+
+    /** O chat vive num MutableContextWrapper: desembrulha até a tela dele (nunca a do app). */
+    private fun chatActivity(context: Context): Activity? {
+        var current: Context? = context
+        while (current is ContextWrapper) {
+            if (current is Activity) return current.takeIf { it.javaClass.name == CHAT_ACTIVITY }
+            current = current.baseContext
+        }
+        return null
     }
 
     private fun launcherOptions(record: LauncherRecord): AtaliaLauncherOptions {
@@ -191,6 +241,7 @@ class AtaliaChatModule : Module() {
             draggable = record.draggable ?: false,
             dockable = record.dockable ?: defaults.dockable,
             preloadChat = record.preloadChat ?: defaults.preloadChat,
+            popups = record.popups ?: defaults.popups,
         )
     }
 

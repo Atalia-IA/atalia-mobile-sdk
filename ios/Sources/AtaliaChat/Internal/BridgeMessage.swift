@@ -38,6 +38,19 @@ struct BridgeMessage {
         payload[key] as? Bool
     }
 
+    /// `popup_changed` da camada dos balões: o balão apareceu (com o tamanho que o WebView precisa
+    /// ter, em pontos) ou sumiu. Nil para outro tipo ou sem `visible`.
+    var popupChange: PopupChange? {
+        guard type == "popup_changed", let visible = bool("visible") else { return nil }
+        return PopupChange(visible: visible, kind: string("kind"), width: int("width"), height: int("height"))
+    }
+
+    /// `open_chat` da camada dos balões: o visitante tocou no balão. Nil para outro tipo.
+    var openChat: OpenChatRequest? {
+        guard type == "open_chat" else { return nil }
+        return OpenChatRequest(conversationId: int("conversationId"), noticeRuleId: int("noticeRuleId"), noticeButton: int("noticeButton"))
+    }
+
     /// Evento público correspondente, ou nil para mensagens internas (sessão, links,
     /// downloads, fechar) e para tipos desconhecidos.
     var publicEvent: AtaliaEvent? {
@@ -64,5 +77,24 @@ struct BridgeMessage {
         default:
             return nil
         }
+    }
+}
+
+struct PopupChange: Equatable {
+    var visible: Bool
+    /// `notice`, `message` ou `teaser`.
+    var kind: String?
+    var width: Int?
+    var height: Int?
+}
+
+/// Onde o chat abre depois do toque no balão: na conversa, no aviso ou do jeito padrão (tudo nil).
+struct OpenChatRequest: Equatable {
+    var conversationId: Int?
+    var noticeRuleId: Int?
+    var noticeButton: Int?
+
+    var notice: ChatNotice? {
+        noticeRuleId.map { ChatNotice(ruleId: $0, button: noticeButton) }
     }
 }

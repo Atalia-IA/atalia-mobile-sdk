@@ -15,6 +15,21 @@ extension ChatBridgeTarget {
     func primaryColorDidChange() {}
 }
 
+/// Camada dos balões (protocol/README.md): além dos comandos, acompanha a sessão guardada e a
+/// abertura do chat.
+@MainActor
+protocol PopupLayerTarget: ChatBridgeTarget {
+    /// A sessão guardada (ou a configuração) mudou: a página recarrega com o fragmento novo.
+    func sessionDidChange()
+    /// A tela do chat vai abrir por cima: o balão some já, antes da animação.
+    func chatWillOpen()
+}
+
+/// Referência fraca a uma página viva (tela do chat ou camada dos balões).
+private struct WeakBridgeTarget {
+    weak var value: ChatBridgeTarget?
+}
+
 /// Estado e regras do SDK. A fachada pública é `Atalia`; os testes criam instâncias próprias.
 @MainActor
 final class AtaliaCore {
@@ -39,6 +54,13 @@ final class AtaliaCore {
     private(set) var branding = ChannelBranding()
     /// Cor primária do canal (cabeçalho do chat), para a barra de status combinar antes de a página carregar.
     var primaryColorHex: String? { branding.primaryColor }
+
+    /// Tela do app em que o visitante está (`Atalia.setPage`), no formato do `page` do fragmento.
+    private(set) var page: String?
+    /// Páginas vivas (chat aberto ou pré-carregado e camadas dos balões): recebem o `set_page`.
+    private var bridgeTargets: [WeakBridgeTarget] = []
+    /// Última sessão avisada às camadas dos balões.
+    private var announcedSession: String?
 
     private var listeners: [AtaliaListenerToken: (AtaliaEvent) -> Void] = [:]
     private var waiters: [EventWaiter] = []
@@ -76,6 +98,9 @@ final class AtaliaCore {
             pendingPushToken = nil
         }
         state.isIdentified = store.load()?.identified ?? false
+        // Canal ou origem podem ter mudado: a camada dos balões recarrega com a configuração nova.
+        announcedSession = store.load()?.token
+        popupLayers.forEach { $0.sessionDidChange() }
         // Aparência da última abertura: a tela aberta pelo toque numa notificação, logo ao iniciar o
         // app, já nasce com o topo certo, e o botão flutuante não troca de lado nem de cor. Sem
         // cache, o botão espera a primeira consulta em vez de aparecer com a cor padrão.
@@ -111,8 +136,54 @@ final class AtaliaCore {
             return token
         }
         sessionTask = task
-        defer { sessionTask = nil }
+        defer {
+            sessionTask = nil
+            sessionStoreDidChange()
+        }
         return try await task.value
+    }
+
+    /// Chamado depois de toda gravação da sessão (criar, identificar, sair, `session_changed` da
+    /// tela do chat). Token diferente do último avisado: as camadas dos balões recarregam.
+    private func sessionStoreDidChange() {
+        let token = storedSessionToken
+        guard token != announcedSession else { return }
+        announcedSession = token
+        popupLayers.forEach { $0.sessionDidChange() }
+    }
+
+    // MARK: Páginas vivas
+
+    /// A tela do chat e a camada dos balões se registram ao carregar a página e saem ao desmontar.
+    func register(_ target: ChatBridgeTarget) {
+        bridgeTargets.removeAll { $0.value == nil || $0.value === target }
+        bridgeTargets.append(WeakBridgeTarget(value: target))
+    }
+
+    func unregister(_ target: ChatBridgeTarget) {
+        bridgeTargets.removeAll { $0.value == nil || $0.value === target }
+    }
+
+    private var popupLayers: [PopupLayerTarget] {
+        bridgeTargets.compactMap { $0.value as? PopupLayerTarget }
+    }
+
+    /// Tela do app mudou: guarda para os próximos carregamentos e avisa as páginas vivas.
+    func setPage(_ url: String?) {
+        let trimmed = url?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let value = trimmed.isEmpty ? nil : String(trimmed.prefix(AtaliaCore.maxPageLength))
+        guard value != page else { return }
+        page = value
+        let payload: [String: Any] = ["url": value ?? NSNull()]
+        bridgeTargets.compactMap(\.value).forEach { $0.sendCommand("set_page", payload: payload) }
+    }
+
+    /// Limite do `page` no contrato do bridge.
+    static let maxPageLength = 2048
+
+    /// A tela do chat vai ser apresentada: os balões saem antes da animação.
+    func chatWillOpen() {
+        popupLayers.forEach { $0.chatWillOpen() }
     }
 
     var storedSessionToken: String? {
@@ -158,6 +229,7 @@ final class AtaliaCore {
             throw AtaliaError(code: response.code ?? "INVALID_TOKEN")
         }
         config.store.save(StoredSession(token: newToken, identified: true, externalId: externalId))
+        sessionStoreDidChange()
         state.isIdentified = true
         emit(.identified(externalId: externalId, contactId: contactId))
         _ = try? await refreshUnread()
@@ -181,6 +253,7 @@ final class AtaliaCore {
         // A próxima abertura cria uma sessão anônima nova: o histórico do usuário anterior
         // não aparece para quem usar o aparelho depois.
         config.store.clear()
+        sessionStoreDidChange()
         registeredPush = nil
         state.isIdentified = false
         setUnread(0)
@@ -249,6 +322,7 @@ final class AtaliaCore {
         if response?.status == 401 {
             // Sessão identificada que venceu: troca por uma anônima e repete uma vez.
             config.store.clear()
+            sessionStoreDidChange()
             state.isIdentified = false
             guard let fresh = try? await ensureSession() else { return }
             session = fresh
@@ -338,6 +412,7 @@ final class AtaliaCore {
             if let token = message.string("sessionToken") {
                 let identified = message.bool("identified") ?? false
                 configuration?.store.save(StoredSession(token: token, identified: identified, externalId: message.string("externalId")))
+                sessionStoreDidChange()
                 state.isIdentified = identified
                 // Sessão nova vinda do widget (identify/logout pelo chat): o aparelho acompanha.
                 if configuration?.store.loadPushToken() != nil, registeredPush?.session != token {

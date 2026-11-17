@@ -14,25 +14,52 @@ struct SdkFragment: Equatable {
     /// Chat pré-carregado pelo botão flutuante: a página nasce em segundo plano (sem conexão, sem
     /// presença, sem marcar lidas) até o `app_state` de primeiro plano.
     var background = false
+    /// Tela do app em que o visitante está (`Atalia.setPage`): o que as regras por página comparam.
+    var page: String?
+    /// Abre direto no aviso dessa regra (toque no balão do aviso).
+    var notice: ChatNotice?
 
     var jsonObject: [String: Any] {
+        var json = popupJSONObject
+        json["closeButton"] = closeButton
+        if let identity { json["identity"] = identity }
+        if let conversationId { json["conversationId"] = conversationId }
+        if background { json["background"] = true }
+        if let notice { json["notice"] = notice.jsonObject }
+        return json
+    }
+
+    /// Fragmento da camada dos balões: só o que ela lê. Nunca identidade, conversa, aviso nem
+    /// segundo plano.
+    var popupJSONObject: [String: Any] {
         var json: [String: Any] = [
             "protocol": protocolVersion,
             "platform": platform,
             "sdkVersion": sdkVersion,
-            "closeButton": closeButton,
         ]
         if let appVersion { json["appVersion"] = appVersion }
         if let session { json["session"] = session }
-        if let identity { json["identity"] = identity }
-        if let conversationId { json["conversationId"] = conversationId }
-        if background { json["background"] = true }
+        if let page { json["page"] = page }
         return json
     }
 
-    func encoded() -> String {
-        let data = (try? JSONSerialization.data(withJSONObject: jsonObject, options: [.sortedKeys])) ?? Data("{}".utf8)
+    func encoded(popup: Bool = false) -> String {
+        let json = popup ? popupJSONObject : jsonObject
+        let data = (try? JSONSerialization.data(withJSONObject: json, options: [.sortedKeys])) ?? Data("{}".utf8)
         return Base64URL.encode(data)
+    }
+}
+
+/// Aviso das regras por página a abrir no chat: a regra e, quando o toque foi num botão de fluxo
+/// do balão, a posição dele (o aviso já vira conversa).
+struct ChatNotice: Equatable {
+    var ruleId: Int
+    var button: Int?
+
+    var jsonObject: [String: Any] {
+        var json: [String: Any] = ["ruleId": ruleId]
+        if let button { json["button"] = button }
+        return json
     }
 }
 
@@ -42,11 +69,12 @@ enum BridgeProtocol {
 
 enum ChatURLBuilder {
     /// `<base>/chat/<token>?sdk=1#sdk=...`, ou `<base>/?sdk=1#sdk=...` no domínio próprio.
-    static func url(baseURL: URL, channelToken: String, customDomain: Bool, fragment: SdkFragment) -> URL {
+    /// Com `popup`, a camada dos balões: `?sdk=popup` e o fragmento reduzido.
+    static func url(baseURL: URL, channelToken: String, customDomain: Bool, fragment: SdkFragment, popup: Bool = false) -> URL {
         var base = baseURL.absoluteString
         while base.hasSuffix("/") { base.removeLast() }
         let path = customDomain ? "/" : "/chat/\(pathSegment(channelToken))"
-        return URL(string: "\(base)\(path)?sdk=1#sdk=\(fragment.encoded())")!
+        return URL(string: "\(base)\(path)?sdk=\(popup ? "popup" : "1")#sdk=\(fragment.encoded(popup: popup))")!
     }
 
     static func pathSegment(_ value: String) -> String {

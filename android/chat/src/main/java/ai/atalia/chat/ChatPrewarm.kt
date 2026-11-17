@@ -81,6 +81,11 @@ internal object ChatPrewarm {
         return true
     }
 
+    /** A tela do app mudou: o chat que espera escondido acompanha. */
+    fun setPage(url: String?) {
+        chat?.setPage(url)
+    }
+
     private fun release() {
         chat?.destroy()
         chat = null

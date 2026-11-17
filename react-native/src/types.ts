@@ -12,6 +12,13 @@ export type AtaliaOptions = {
   debug?: boolean;
   /** iOS: com o push ligado, o número no ícone do app acompanha as não lidas. Padrão: `true`. */
   appBadge?: boolean;
+  /**
+   * Sites cujos links o seu app abre por dentro (ex.: `['exemplo.com.br']`; subdomínios entram junto).
+   * Link tocado no chat para um deles não vai ao navegador: o chat fecha e chega o evento
+   * `linkPressed` com a URL, para o app navegar até a tela. Só vale com um listener registrado
+   * ({@link addListener} ou `useAtaliaEvent`); sem ele, o link abre pelo sistema como os outros.
+   */
+  appLinkHosts?: string[];
 };
 
 /** Contato da Atalia vinculado ao usuário identificado. */
@@ -37,6 +44,8 @@ export type AtaliaEvent =
   /** Chegou mensagem do atendente, da IA ou do sistema. Só ids: o texto nunca sai do chat. */
   | { type: 'messageReceived'; conversationId: number; messageId: number }
   | { type: 'unreadChanged'; count: number }
+  /** O visitante tocou num link de um dos `appLinkHosts`. O chat já fechou: navegue até a tela. */
+  | { type: 'linkPressed'; url: string }
   /** Falha do chat (`INIT_FAILED`) ou de um comando (`command` = "identify", "open_conversation"...). */
   | { type: 'error'; code: string; command: string | null };
 
@@ -86,4 +95,9 @@ export type AtaliaLauncherOptions = {
   dockable?: boolean;
   /** Carrega o chat escondido enquanto o botão está na tela: o toque abre o chat pronto. Padrão: `true`. */
   preloadChat?: boolean;
+  /**
+   * Mostra, acima do botão, os balões do chat fechado: aviso das regras por página, prévia da
+   * mensagem nova e boas-vindas, iguais aos do site. Padrão: `true`. Ver {@link setPage}.
+   */
+  popups?: boolean;
 };

@@ -341,7 +341,7 @@ Passadas no `configure` (`AtaliaOptions`):
 | `customDomain` | `false` | `true` quando a origem é o domínio próprio vinculado ao canal |
 | `closeButton` | `true` | Desligue quando o chat for uma aba do app |
 | `presentationStyle` (iOS) / `presentation` (Android) | folha (`.pageSheet` / `SHEET`) | O chat sobe numa folha sobre o app; `.fullScreen` / `FULL_SCREEN` abre em tela cheia |
-| `urlHandler` (só Android) | nenhum | Decide como abrir os links tocados no chat. No iOS: `Atalia.urlHandler` |
+| `urlHandler` (só Android) | nenhum | Decide como abrir os links tocados no chat. No iOS: `Atalia.urlHandler`. No React Native: `appLinkHosts` + evento `linkPressed` |
 | `notificationIcon` (só Android) | balão da Atalia | Ícone pequeno (monocromático) da notificação mostrada com o app aberto |
 | `appBadge` (só iOS) | `true` | Com o push ligado, o número no ícone do app acompanha as não lidas. Desligue se o app tem contador próprio: o push da Atalia também deixa de mexer nele |
 | `debug` | `false` | Inspecionar o WebView (Safari / `chrome://inspect`). Nunca em produção |

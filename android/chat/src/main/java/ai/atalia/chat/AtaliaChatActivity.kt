@@ -1,6 +1,7 @@
 package ai.atalia.chat
 
 import ai.atalia.chat.internal.AtaliaLog
+import ai.atalia.chat.internal.NoticeTarget
 import android.Manifest
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
@@ -50,6 +51,8 @@ class AtaliaChatActivity : ComponentActivity(), AtaliaChatView.Host {
 
     companion object {
         internal const val EXTRA_CONVERSATION_ID = "ai.atalia.chat.CONVERSATION_ID"
+        internal const val EXTRA_NOTICE_RULE_ID = "ai.atalia.chat.NOTICE_RULE_ID"
+        internal const val EXTRA_NOTICE_BUTTON = "ai.atalia.chat.NOTICE_BUTTON"
         private const val DEFAULT_PRIMARY = "#1036F2"
         private const val SCRIM_ALPHA = 0.45f
         private const val HANDLE_DP = 22
@@ -100,13 +103,16 @@ class AtaliaChatActivity : ComponentActivity(), AtaliaChatView.Host {
         // O chat pré-carregado pelo botão flutuante, se ainda serve; senão, um novo. Os dois num
         // MutableContextWrapper, para o chat poder voltar a esperar escondido quando esta tela fechar.
         val conversationId = conversationIdFrom(intent)
+        // O aviso só vale na abertura: tela recriada pelo sistema não transforma o aviso em conversa de novo.
+        val notice = if (savedInstanceState == null && conversationId == null) noticeFrom(intent) else null
         chatView = ChatPrewarm.take(this)?.also { prepared ->
             prepared.host = this
             conversationId?.let(prepared::openConversation)
+            notice?.let(prepared::openNotice)
             prepared.activate()
         } ?: AtaliaChatView(MutableContextWrapper(this)).also {
             it.host = this
-            it.load(conversationId)
+            it.load(conversationId, background = false, notice = notice)
         }
 
         val primary = parsePrimary(core.primaryColor)
@@ -162,7 +168,9 @@ class AtaliaChatActivity : ComponentActivity(), AtaliaChatView.Host {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        conversationIdFrom(intent)?.let { chatView.openConversation(it) }
+        if (!::chatView.isInitialized) return
+        val conversationId = conversationIdFrom(intent)
+        if (conversationId != null) chatView.openConversation(conversationId) else noticeFrom(intent)?.let(chatView::openNotice)
     }
 
     override fun onStart() {
@@ -189,6 +197,12 @@ class AtaliaChatActivity : ComponentActivity(), AtaliaChatView.Host {
 
     private fun conversationIdFrom(intent: Intent?): Long? =
         intent?.takeIf { it.hasExtra(EXTRA_CONVERSATION_ID) }?.getLongExtra(EXTRA_CONVERSATION_ID, 0L)?.takeIf { it > 0 }
+
+    private fun noticeFrom(intent: Intent?): NoticeTarget? {
+        val ruleId = intent?.takeIf { it.hasExtra(EXTRA_NOTICE_RULE_ID) }?.getLongExtra(EXTRA_NOTICE_RULE_ID, 0L)?.takeIf { it > 0 } ?: return null
+        val button = intent.takeIf { it.hasExtra(EXTRA_NOTICE_BUTTON) }?.getIntExtra(EXTRA_NOTICE_BUTTON, -1)?.takeIf { it >= 0 }
+        return NoticeTarget(ruleId, button)
+    }
 
     // Entrada, saída e arrasto da folha
 

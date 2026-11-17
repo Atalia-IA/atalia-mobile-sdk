@@ -43,6 +43,37 @@ class BridgeMessageTest {
     }
 
     @Test
+    fun popupMessagesMatchFixture() {
+        val cases = fixture.getJSONArray("popupMessages")
+        assertTrue(cases.length() > 0)
+        for (i in 0 until cases.length()) {
+            val item = cases.getJSONObject(i)
+            val raw = item.getJSONObject("raw")
+            val expect = item.getJSONObject("expect")
+            val message = assertNotNull(BridgeMessage.parse(raw.toString()), "não decodificou $raw")
+            assertNull("mensagem da camada dos balões não é evento público", message.toPublicEvent())
+            when (val type = raw.getString("type")) {
+                "popup_changed" -> {
+                    val change = assertNotNull(message.toPopupChange(), "popup_changed sem leitura: $raw")
+                    assertNull(message.toOpenChat())
+                    assertEquals(expect.getBoolean("visible"), change.visible)
+                    assertEquals(expect.opt("kind") as? String, change.kind)
+                    assertEquals((expect.opt("width") as? Number)?.toInt(), change.width)
+                    assertEquals((expect.opt("height") as? Number)?.toInt(), change.height)
+                }
+                "open_chat" -> {
+                    val request = assertNotNull(message.toOpenChat(), "open_chat sem leitura: $raw")
+                    assertNull(message.toPopupChange())
+                    assertEquals((expect.opt("conversationId") as? Number)?.toLong(), request.conversationId)
+                    assertEquals((expect.opt("noticeRuleId") as? Number)?.toLong(), request.noticeRuleId)
+                    assertEquals((expect.opt("noticeButton") as? Number)?.toInt(), request.noticeButton)
+                }
+                else -> throw AssertionError("tipo inesperado na fixture: $type")
+            }
+        }
+    }
+
+    @Test
     fun unknownAndMalformedMessagesAreIgnored() {
         val cases: JSONArray = fixture.getJSONArray("ignored")
         for (i in 0 until cases.length()) {

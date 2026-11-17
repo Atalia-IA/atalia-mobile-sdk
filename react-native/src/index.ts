@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 
 import Native from './AtaliaChatModule';
+import { normalizeAppLinkHosts } from './links';
 import { isAtaliaNotification, notificationData, notificationText } from './notifications';
 import type {
   AtaliaContact,
@@ -25,7 +26,7 @@ export type AtaliaSubscription = { remove(): void };
  * só é necessária para trocar as opções.
  */
 export function configure(channelToken: string, options: AtaliaOptions = {}): void {
-  Native.configure(channelToken, options);
+  Native.configure(channelToken, { ...options, appLinkHosts: normalizeAppLinkHosts(options.appLinkHosts) });
 }
 
 /** Abre o chat por cima do app. */
@@ -146,6 +147,18 @@ export function hideLauncher(): void {
   Native.hideLauncher();
 }
 
+// Tela do app
+
+/**
+ * Diz em que tela do app o visitante está, para as regras por página do canal (avisos e modo de
+ * abertura) valerem no app como valem no site. Passe a URL equivalente do site
+ * (`https://exemplo.com.br/cursos/10`) ou só o caminho (`/cursos/10`); `null` volta ao padrão, em
+ * que só valem as regras de "todas as páginas". Chame a cada troca de tela.
+ */
+export function setPage(url: string | null): void {
+  Native.setPage(typeof url === 'string' && url.trim() ? url.trim().slice(0, 2048) : null);
+}
+
 // Hooks
 
 const INITIAL_STATE: AtaliaState = { unreadCount: 0, isIdentified: false, isChatOpen: false };
@@ -211,6 +224,7 @@ const Atalia = {
   handleNotificationTap,
   showLauncher,
   hideLauncher,
+  setPage,
 };
 
 export default Atalia;

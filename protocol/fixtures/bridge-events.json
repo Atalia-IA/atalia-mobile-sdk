@@ -43,5 +43,27 @@
     { "v": 2, "type": "algo_de_uma_versao_futura", "payload": {} },
     { "v": 1, "payload": {} },
     "isto não é JSON"
+  ],
+  "popupMessages": [
+    {
+      "raw": { "v": 1, "type": "popup_changed", "payload": { "visible": true, "kind": "notice", "width": 314, "height": 262 } },
+      "expect": { "visible": true, "kind": "notice", "width": 314, "height": 262 }
+    },
+    {
+      "raw": { "v": 1, "type": "popup_changed", "payload": { "visible": false } },
+      "expect": { "visible": false, "kind": null, "width": null, "height": null }
+    },
+    {
+      "raw": { "v": 1, "type": "open_chat", "payload": { "conversationId": 101, "noticeRuleId": null, "noticeButton": null } },
+      "expect": { "conversationId": 101, "noticeRuleId": null, "noticeButton": null }
+    },
+    {
+      "raw": { "v": 1, "type": "open_chat", "payload": { "conversationId": null, "noticeRuleId": 7, "noticeButton": 0 } },
+      "expect": { "conversationId": null, "noticeRuleId": 7, "noticeButton": 0 }
+    },
+    {
+      "raw": { "v": 1, "type": "open_chat", "payload": { "conversationId": null, "noticeRuleId": null, "noticeButton": null } },
+      "expect": { "conversationId": null, "noticeRuleId": null, "noticeButton": null }
+    }
   ]
 }
