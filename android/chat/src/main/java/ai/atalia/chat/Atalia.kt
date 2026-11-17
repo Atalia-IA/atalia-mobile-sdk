@@ -39,7 +39,7 @@ import java.util.Locale
  * ```
  */
 object Atalia {
-    const val SDK_VERSION = "0.4.1"
+    const val SDK_VERSION = "0.5.0"
 
     private val state = AtaliaStateHolder()
     private val mainHandler = Handler(Looper.getMainLooper())

@@ -2,7 +2,9 @@
 
 Versões seguem [SemVer](https://semver.org/lang/pt-BR/). O protocolo do bridge tem versão própria (ver [protocol/README.md](protocol/README.md)).
 
-## Não lançado
+## 0.5.0 (2026-11-17)
+
+Balões do chat fechado no app, tela do app para as regras por página e links do site abrindo dentro do app.
 
 ### Novidades
 
