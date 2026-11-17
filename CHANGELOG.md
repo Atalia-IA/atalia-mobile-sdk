@@ -6,6 +6,9 @@ Versões seguem [SemVer](https://semver.org/lang/pt-BR/). O protocolo do bridge 
 
 ### Novidades
 
+- Balões do chat fechado no app (Android, iOS e React Native): com o botão flutuante na tela, o aviso das regras por página (texto, imagem, vídeo, botões, contagem regressiva e roleta), a prévia da mensagem nova e o balão de boas-vindas aparecem acima do botão, iguais aos do site. Tocar abre o chat no aviso ou na conversa. São desenhados pelo próprio chat numa camada transparente, então novidades dos balões chegam sem versão nova do SDK. Opção nova `popups` no botão flutuante (padrão ligado).
+- `Atalia.setPage(...)` (Android, iOS e React Native): o app informa a tela em que o usuário está (a URL equivalente do site ou um caminho como `/cursos/10`) e as regras por página do canal passam a valer no app. Sem ela, valem só as regras de "todas as páginas".
+- Protocolo do bridge: campos `page` e `notice` no fragmento, página `?sdk=popup`, eventos `popup_changed` e `open_chat`, comandos `set_page` e `open_notice` (ver [protocol/README.md](protocol/README.md)).
 - React Native: links do site do próprio app abrem dentro do app. A opção nova `appLinkHosts` do `configure` lista os sites (subdomínios entram junto); ao tocar num link deles no chat, o chat fecha e chega o evento novo `linkPressed` com a URL, para o app navegar até a tela. Os outros links seguem abrindo pelo sistema. É o `urlHandler` dos SDKs nativos, que não tinha como ser chamado pelo JavaScript. Com o encurtador de links da Atalia ligado, o chat entrega ao app o endereço de destino (com os parâmetros de rastreio), não o link curto; isso vale também para o `urlHandler` dos SDKs nativos e não depende da versão do SDK.
 
 ## 0.4.1 (2026-10-27)

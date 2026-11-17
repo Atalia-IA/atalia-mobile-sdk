@@ -42,6 +42,9 @@ public struct AtaliaLauncherOptions {
     public var dockable: Bool
     /// Carrega o chat escondido enquanto o botão está na tela: o toque abre o chat pronto.
     public var preloadChat: Bool
+    /// Mostra, acima do botão, os balões do widget fechado: aviso das regras por página do canal,
+    /// mensagem nova e boas-vindas. O toque no balão abre o chat. Desligue para ficar só com o botão.
+    public var popups: Bool
     /// O que o toque faz. Nil = `Atalia.present()`.
     public var onTap: (() -> Void)?
 
@@ -57,6 +60,7 @@ public struct AtaliaLauncherOptions {
         draggable: Bool = false,
         dockable: Bool = true,
         preloadChat: Bool = true,
+        popups: Bool = true,
         onTap: (() -> Void)? = nil
     ) {
         self.side = side
@@ -70,6 +74,7 @@ public struct AtaliaLauncherOptions {
         self.draggable = draggable
         self.dockable = dockable
         self.preloadChat = preloadChat
+        self.popups = popups
         self.onTap = onTap
     }
 }
@@ -96,12 +101,17 @@ public extension View {
 public final class AtaliaLauncherView: UIView {
     private var host: UIHostingController<AtaliaLauncherLayer>?
     private var buttonFrames: [CGRect] = []
+    private let options: AtaliaLauncherOptions
+    /// Balões do widget fechado, acima do botão (`AtaliaLauncherOptions.popups`).
+    private var popupLayer: AtaliaPopupLayer?
 
     public init(options: AtaliaLauncherOptions = AtaliaLauncherOptions()) {
+        self.options = options
         super.init(frame: .zero)
         backgroundColor = .clear
-        let host = UIHostingController(rootView: AtaliaLauncherLayer(options: options) { [weak self] frames in
+        let host = UIHostingController(rootView: AtaliaLauncherLayer(options: options, hostsPopups: false) { [weak self] frames in
             self?.buttonFrames = frames
+            self?.pushLauncherFrames()
         })
         host.view.backgroundColor = .clear
         host.view.translatesAutoresizingMaskIntoConstraints = false
@@ -136,6 +146,35 @@ public final class AtaliaLauncherView: UIView {
         return launcher
     }
 
+    /// A camada dos balões entra em quem recebe o botão, logo abaixo dele, e sai junto.
+    public override func didMoveToSuperview() {
+        super.didMoveToSuperview()
+        popupLayer?.tearDown()
+        popupLayer = nil
+        guard options.popups, let superview else { return }
+        let popup = AtaliaPopupLayer(options: options)
+        popup.install(in: superview, below: self)
+        popupLayer = popup
+        pushLauncherFrames()
+    }
+
+    public override func layoutSubviews() {
+        super.layoutSubviews()
+        pushLauncherFrames()
+        popupLayer?.containerDidLayout()
+    }
+
+    public override func safeAreaInsetsDidChange() {
+        super.safeAreaInsetsDidChange()
+        popupLayer?.containerDidLayout()
+    }
+
+    /// As posições do botão chegam nas coordenadas desta view; os balões usam as de quem a contém.
+    private func pushLauncherFrames() {
+        guard let popupLayer, let superview else { return }
+        popupLayer.setLauncherFrames(buttonFrames.map { convert($0, to: superview) })
+    }
+
     /// Só as partes visíveis do botão (círculo, pílula aberta ou aba) recebem toque.
     public override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         guard buttonFrames.contains(where: { $0.insetBy(dx: -4, dy: -4).contains(point) }) else { return nil }
@@ -151,6 +190,8 @@ public final class AtaliaLauncherView: UIView {
 /// (ou puxar) a aba o traz de volta.
 struct AtaliaLauncherLayer: View {
     let options: AtaliaLauncherOptions
+    /// No SwiftUI a própria camada cuida dos balões; na versão UIKit, quem cuida é a `AtaliaLauncherView`.
+    var hostsPopups = true
     var onButtonFrames: (([CGRect]) -> Void)?
 
     @ObservedObject private var state = AtaliaCore.shared.state
@@ -164,6 +205,8 @@ struct AtaliaLauncherLayer: View {
     @State private var collapseToken = 0
     @State private var lastUnread: Int?
     @State private var prewarmRegistered = false
+    /// Partes visíveis do botão, para os balões ficarem acima dele.
+    @State private var popupFrames: [CGRect] = []
 
     // Gestos e animações do círculo e da aba.
     @State private var pressing = false
@@ -180,8 +223,9 @@ struct AtaliaLauncherLayer: View {
     @State private var draggedSide: AtaliaLauncherOptions.Side?
     @State private var lift: CGFloat = 0
 
-    init(options: AtaliaLauncherOptions, onButtonFrames: (([CGRect]) -> Void)? = nil) {
+    init(options: AtaliaLauncherOptions, hostsPopups: Bool = true, onButtonFrames: (([CGRect]) -> Void)? = nil) {
         self.options = options
+        self.hostsPopups = hostsPopups
         self.onButtonFrames = onButtonFrames
     }
 
@@ -200,6 +244,9 @@ struct AtaliaLauncherLayer: View {
         GeometryReader { geo in
             ZStack(alignment: side == .leading ? .bottomLeading : .bottomTrailing) {
                 Color.clear.allowsHitTesting(false)
+                if hostsPopups, options.popups {
+                    PopupAnchor(options: options, frames: popupFrames).allowsHitTesting(false)
+                }
                 if let branding = state.branding, !state.isChatOpen {
                     launcher(branding, geo: geo)
                         .padding(side == .leading ? .leading : .trailing, horizontalInset(geo))
@@ -208,7 +255,10 @@ struct AtaliaLauncherLayer: View {
             }
             .frame(width: geo.size.width, height: geo.size.height)
             .coordinateSpace(name: Self.space)
-            .onPreferenceChange(LauncherFramesKey.self) { onButtonFrames?($0) }
+            .onPreferenceChange(LauncherFramesKey.self) { frames in
+                onButtonFrames?(frames)
+                if hostsPopups, options.popups { popupFrames = frames }
+            }
             .onDisappear { onButtonFrames?([]) }
         }
         .ignoresSafeArea()
@@ -588,6 +638,20 @@ struct AtaliaLauncherLayer: View {
 
     private func after(_ seconds: Double, _ work: @escaping @MainActor () -> Void) {
         DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { work() }
+    }
+}
+
+/// Ponte do SwiftUI para a camada dos balões: ocupa a área da camada do botão, sem receber toque.
+private struct PopupAnchor: UIViewRepresentable {
+    let options: AtaliaLauncherOptions
+    let frames: [CGRect]
+
+    func makeUIView(context: Context) -> PopupAnchorView {
+        PopupAnchorView(options: options)
+    }
+
+    func updateUIView(_ view: PopupAnchorView, context: Context) {
+        view.launcherFrames = frames
     }
 }
 

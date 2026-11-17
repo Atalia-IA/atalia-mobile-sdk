@@ -156,6 +156,19 @@ class AtaliaCoreTest {
     }
 
     @Test
+    fun sessionTokenIsObservableWhereverItChanges() = runTest {
+        assertNull(state.sessionToken.value)
+        val created = core.ensureSession()
+        assertEquals(created, state.sessionToken.value)
+
+        core.handle(BridgeMessage.parse("""{"v":1,"type":"session_changed","payload":{"sessionToken":"from-widget-2","identified":false,"externalId":null}}""")!!)
+        assertEquals("from-widget-2", state.sessionToken.value)
+
+        core.logout()
+        assertNull("logout sem chat aberto apaga a sessão", state.sessionToken.value)
+    }
+
+    @Test
     fun identifyWithOpenChatGoesThroughWidget() = runTest {
         val chat = FakeChat { type, _ ->
             if (type == "identify") """{"v":1,"type":"identified","payload":{"externalId":"user-7","contactId":70}}""" else null

@@ -5,15 +5,13 @@ import ai.atalia.chat.internal.AtaliaLog
 import ai.atalia.chat.internal.BridgeMessage
 import ai.atalia.chat.internal.ChatBridgeTarget
 import ai.atalia.chat.internal.ChatUrl
-import ai.atalia.chat.internal.LegacyBridge
+import ai.atalia.chat.internal.NoticeTarget
 import ai.atalia.chat.internal.SdkFragment
+import ai.atalia.chat.internal.WebBridge
 import android.Manifest
 import android.annotation.SuppressLint
-import android.app.Activity
 import android.app.DownloadManager
-import android.content.ActivityNotFoundException
 import android.content.Context
-import android.content.Intent
 import android.graphics.Color
 import android.net.Uri
 import android.os.Environment
@@ -36,8 +34,6 @@ import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
-import androidx.webkit.WebViewCompat
-import androidx.webkit.WebViewFeature
 import org.json.JSONObject
 
 /**
@@ -70,6 +66,7 @@ class AtaliaChatView @JvmOverloads constructor(
     private var ready = false
     private val pendingCommands = mutableListOf<Pair<String, JSONObject?>>()
     private var currentConversationId: Long? = null
+    private var currentNotice: NoticeTarget? = null
     /** Estado com que a página nasceu e o último pedido antes do `ready` (só vale o último). */
     private var bornState = APP_FOREGROUND
     private var pendingAppState: String? = null
@@ -108,9 +105,10 @@ class AtaliaChatView @JvmOverloads constructor(
      * presença, sem marcar lidas) e só vira o chat da tela no [activate].
      */
     @SuppressLint("SetJavaScriptEnabled")
-    internal fun load(conversationId: Long?, background: Boolean) {
+    internal fun load(conversationId: Long?, background: Boolean, notice: NoticeTarget? = null) {
         val core = core ?: return
         currentConversationId = conversationId
+        currentNotice = notice
         destroyWebView()
         hideError()
         ready = false
@@ -146,6 +144,8 @@ class AtaliaChatView @JvmOverloads constructor(
             conversationId = conversationId,
             closeButton = core.options.closeButton,
             background = background,
+            page = core.page,
+            notice = notice,
         )
         webView.loadUrl(ChatUrl.build(core.options.baseUrl, core.channelToken, core.options.customDomain, fragment))
     }
@@ -154,6 +154,18 @@ class AtaliaChatView @JvmOverloads constructor(
     fun openConversation(conversationId: Long) {
         currentConversationId = conversationId
         sendCommand("open_conversation", JSONObject().put("conversationId", conversationId))
+    }
+
+    /** Abre no aviso de uma regra por página com o chat já carregado (toque no balão do aviso). */
+    internal fun openNotice(notice: NoticeTarget) {
+        currentConversationId = null
+        currentNotice = notice
+        sendCommand("open_notice", notice.toCommand())
+    }
+
+    /** A tela do app mudou ([Atalia.setPage]). */
+    internal fun setPage(url: String?) {
+        sendCommand("set_page", JSONObject().put("url", url ?: JSONObject.NULL))
     }
 
     /**
@@ -200,19 +212,7 @@ class AtaliaChatView @JvmOverloads constructor(
     // Bridge
 
     private fun installBridge(webView: WebView, core: AtaliaCore) {
-        val origin = ChatUrl.origin(core.options.baseUrl)
-        if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
-            // O objeto só existe nas páginas da origem da Atalia, e só o frame principal fala.
-            WebViewCompat.addWebMessageListener(webView, BRIDGE_NAME, setOf(origin)) { _, message, _, isMainFrame, _ ->
-                if (isMainFrame) receive(message.data)
-            }
-        } else {
-            @Suppress("JavascriptInterface")
-            webView.addJavascriptInterface(
-                LegacyBridge { json -> if (isTrusted(this.webView?.url)) receive(json) },
-                BRIDGE_NAME,
-            )
-        }
+        WebBridge.install(webView, core.options.baseUrl, currentUrl = { this.webView?.url }, receive = ::receive)
     }
 
     private fun receive(raw: String?) {
@@ -247,8 +247,7 @@ class AtaliaChatView @JvmOverloads constructor(
             if (type == "app_state") pendingAppState = payload?.optString("state") else pendingCommands += type to payload
             return
         }
-        val command = JSONObject().put("type", type).apply { payload?.let { put("payload", it) } }
-        webView.evaluateJavascript("window.AtaliaChat&&window.AtaliaChat._native&&window.AtaliaChat._native($command);", null)
+        WebBridge.send(webView, type, payload)
     }
 
     private fun flushPendingCommands() {
@@ -261,21 +260,13 @@ class AtaliaChatView @JvmOverloads constructor(
 
     private fun isTrusted(url: String?): Boolean {
         val core = core ?: return false
-        return url != null && ChatUrl.origin(url).equals(ChatUrl.origin(core.options.baseUrl), ignoreCase = true)
+        return WebBridge.isTrusted(url, core.options.baseUrl)
     }
 
     // Links e arquivos
 
     private fun openExternal(url: String) {
-        val uri = Uri.parse(url)
-        if (core?.options?.urlHandler?.invoke(context, uri) == true) return
-        val intent = Intent(Intent.ACTION_VIEW, uri)
-        if (context !is Activity) intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        try {
-            context.startActivity(intent)
-        } catch (_: ActivityNotFoundException) {
-            Toast.makeText(context, R.string.atalia_chat_no_app_for_link, Toast.LENGTH_SHORT).show()
-        }
+        WebBridge.openExternal(context, url, core?.options?.urlHandler)
     }
 
     /**
@@ -316,7 +307,7 @@ class AtaliaChatView @JvmOverloads constructor(
             })
             addView(Button(context).apply {
                 setText(R.string.atalia_chat_retry)
-                setOnClickListener { load(currentConversationId) }
+                setOnClickListener { load(currentConversationId, background = false, notice = currentNotice) }
             })
             addView(Button(context).apply {
                 setText(R.string.atalia_chat_close)
@@ -342,10 +333,7 @@ class AtaliaChatView @JvmOverloads constructor(
         webView = null
     }
 
-    private fun appVersion(): String? = runCatching {
-        @Suppress("DEPRECATION")
-        context.packageManager.getPackageInfo(context.packageName, 0).versionName
-    }.getOrNull()
+    private fun appVersion(): String? = WebBridge.appVersion(context)
 
     private val client = object : WebViewClient() {
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
@@ -399,7 +387,6 @@ class AtaliaChatView @JvmOverloads constructor(
     }
 
     private companion object {
-        const val BRIDGE_NAME = "AtaliaAndroid"
         const val READY_FALLBACK_MS = 8_000L
         const val APP_FOREGROUND = "foreground"
         const val APP_BACKGROUND = "background"

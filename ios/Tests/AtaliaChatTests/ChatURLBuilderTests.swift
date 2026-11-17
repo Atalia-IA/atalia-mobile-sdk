@@ -17,12 +17,26 @@ final class ChatURLBuilderTests: XCTestCase {
             fragment.conversationId = expectedJson["conversationId"] as? Int
             fragment.closeButton = expectedJson["closeButton"] as? Bool ?? true
             fragment.background = expectedJson["background"] as? Bool ?? false
+            fragment.page = expectedJson["page"] as? String
+            if let notice = expectedJson["notice"] as? [String: Any] {
+                fragment.notice = ChatNotice(ruleId: try XCTUnwrap(notice["ruleId"] as? Int), button: notice["button"] as? Int)
+            }
+            let popup = item["popup"] as? Bool ?? false
+            if popup {
+                // A camada dos balões nunca leva identidade, conversa, aviso nem segundo plano,
+                // mesmo que a tela do chat os tenha.
+                fragment.identity = "jwt"
+                fragment.conversationId = 5
+                fragment.notice = ChatNotice(ruleId: 1, button: nil)
+                fragment.background = true
+            }
 
             let url = ChatURLBuilder.url(
                 baseURL: try XCTUnwrap(URL(string: try XCTUnwrap(item["baseUrl"] as? String))),
                 channelToken: try XCTUnwrap(item["channelToken"] as? String),
                 customDomain: item["customDomain"] as? Bool ?? false,
-                fragment: fragment
+                fragment: fragment,
+                popup: popup
             )
             let prefix = try XCTUnwrap(item["expectedPrefix"] as? String)
             XCTAssertTrue(url.absoluteString.hasPrefix(prefix), "\(name): \(url.absoluteString)")

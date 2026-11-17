@@ -215,6 +215,51 @@ final class AtaliaCoreTests: XCTestCase {
         }
     }
 
+    func testSetPageReachesLivePagesAndIsKeptForTheNextLoad() {
+        let chat = FakePopupLayer()
+        let gone = FakePopupLayer()
+        core.register(chat)
+        core.register(gone)
+        core.unregister(gone)
+
+        core.setPage("  /cursos/10 ")
+        core.setPage("/cursos/10")
+        XCTAssertEqual(core.page, "/cursos/10")
+        XCTAssertEqual(chat.commands.map(\.type), ["set_page"], "tela repetida não reenvia")
+        XCTAssertEqual(chat.commands.first?.payload?["url"] as? String, "/cursos/10")
+        XCTAssertTrue(gone.commands.isEmpty)
+
+        core.setPage(String(repeating: "a", count: 3000))
+        XCTAssertEqual(core.page?.count, 2048)
+
+        core.setPage(nil)
+        XCTAssertNil(core.page)
+        XCTAssertTrue(chat.commands.last?.payload?["url"] is NSNull)
+    }
+
+    func testPopupLayerReloadsOnlyWhenTheSessionChanges() async throws {
+        store.save(StoredSession(token: "anon-token-1", identified: false, externalId: nil))
+        let popup = FakePopupLayer()
+        core.register(popup)
+
+        // Sessão trocada pela tela do chat.
+        let changed = try XCTUnwrap(BridgeMessage(body: #"{"v":1,"type":"session_changed","payload":{"sessionToken":"identified-token-2","identified":true,"externalId":"u1"}}"#))
+        core.handle(changed)
+        XCTAssertEqual(popup.sessionChanges, 1)
+        core.handle(changed)
+        XCTAssertEqual(popup.sessionChanges, 1, "o mesmo token não recarrega")
+
+        await core.logout()
+        XCTAssertEqual(popup.sessionChanges, 2)
+
+        StubURLProtocol.stubs["POST \(base)/sessions"] = .init(status: 201, json: ["sessionId": 1, "customerId": NSNull(), "isNew": true])
+        _ = try await core.ensureSession()
+        XCTAssertEqual(popup.sessionChanges, 3)
+
+        core.chatWillOpen()
+        XCTAssertEqual(popup.chatOpenings, 1)
+    }
+
     func testNotConfigured() async {
         let core = AtaliaCore()
         do {
@@ -300,5 +345,24 @@ private final class FakeChat: ChatBridgeTarget {
         // O widget responde de forma assíncrona, depois do comando.
         let handler = onCommand
         Task { @MainActor in handler?(type, payload) }
+    }
+}
+
+@MainActor
+private final class FakePopupLayer: PopupLayerTarget {
+    var commands: [(type: String, payload: [String: Any]?)] = []
+    var sessionChanges = 0
+    var chatOpenings = 0
+
+    func sendCommand(_ type: String, payload: [String: Any]?) {
+        commands.append((type, payload))
+    }
+
+    func sessionDidChange() {
+        sessionChanges += 1
+    }
+
+    func chatWillOpen() {
+        chatOpenings += 1
     }
 }

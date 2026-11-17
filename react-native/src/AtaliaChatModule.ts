@@ -22,6 +22,7 @@ declare class AtaliaChatNativeModule extends NativeModule<NativeEvents> {
   handleNotificationTap(data: Record<string, string>): boolean;
   showLauncher(options: AtaliaLauncherOptions): void;
   hideLauncher(): void;
+  setPage(url: string | null): void;
 }
 
 export default requireNativeModule<AtaliaChatNativeModule>('AtaliaChat');

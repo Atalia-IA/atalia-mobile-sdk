@@ -5,8 +5,10 @@ import ai.atalia.chat.internal.AtaliaLog
 import ai.atalia.chat.internal.AtaliaNotifications
 import ai.atalia.chat.internal.AtaliaStateHolder
 import ai.atalia.chat.internal.ChannelBranding
+import ai.atalia.chat.internal.ChatUrl
 import ai.atalia.chat.internal.HttpApiClient
 import ai.atalia.chat.internal.KeystoreSessionStorage
+import ai.atalia.chat.internal.NoticeTarget
 import ai.atalia.chat.internal.PushPayload
 import android.app.Activity
 import android.content.Context
@@ -68,6 +70,12 @@ object Atalia {
     /** Aparência do canal no painel, para o botão flutuante. */
     internal val brandingFlow: StateFlow<ChannelBranding?> = state.branding.asStateFlow()
 
+    /** Token da sessão guardada: a camada dos balões recarrega quando ele muda. */
+    internal val sessionTokenFlow: StateFlow<String?> = state.sessionToken.asStateFlow()
+
+    /** Tela do app informada por [setPage]. */
+    internal val pageFlow: StateFlow<String?> = state.page.asStateFlow()
+
     /**
      * Chame uma vez, no `Application.onCreate`. O token do canal fica em
      * Configurações › Canais › Webchat, no painel da Atalia.
@@ -115,9 +123,34 @@ object Atalia {
     @JvmStatic
     fun open(context: Context) = start(context, null)
 
+    /** Toque no balão de um aviso (camada dos balões): abre o chat nele, carregado ou não. */
+    internal fun openNotice(context: Context, notice: NoticeTarget) = start(context, null, notice)
+
     /** Abre o chat direto numa conversa (toque numa notificação). Com o chat já aberto, só troca de conversa. */
     @JvmStatic
     fun openConversation(context: Context, conversationId: Long) = start(context, conversationId)
+
+    /**
+     * Informa a tela do app em que o usuário está, para as regras por página do canal (painel da
+     * Atalia: Canal › Widget › Antes de abrir) valerem no app como valem no site. Passe a URL
+     * equivalente do site (`https://exemplo.com.br/cursos/10`) ou um caminho (`/cursos/10`), com
+     * até 2048 caracteres, a cada troca de tela. `null` limpa: só valem as regras de "todas as páginas".
+     *
+     * Pode ser chamado de qualquer thread e antes do [configure]. O chat aberto ou pré-carregado e
+     * os balões do botão flutuante recebem a tela nova na hora.
+     */
+    @JvmStatic
+    fun setPage(url: String?) {
+        runOnMain {
+            val page = ChatUrl.normalizePage(url)
+            if (state.page.value != page) {
+                state.page.value = page
+                // O chat da tela e o que espera escondido; a camada dos balões observa o estado.
+                core?.activeChat?.sendCommand("set_page", JSONObject().put("url", page ?: JSONObject.NULL))
+                ChatPrewarm.setPage(page)
+            }
+        }
+    }
 
     /**
      * Vincula o visitante ao usuário logado no app. O JWT é assinado pelo SEU backend com o
@@ -265,10 +298,14 @@ object Atalia {
 
     private fun requireCore(): AtaliaCore = core ?: throw AtaliaException(AtaliaException.NOT_CONFIGURED)
 
-    private fun start(context: Context, conversationId: Long?) {
+    private fun start(context: Context, conversationId: Long?, notice: NoticeTarget? = null) {
         requireCore()
         val intent = Intent(context, AtaliaChatActivity::class.java)
         conversationId?.let { intent.putExtra(AtaliaChatActivity.EXTRA_CONVERSATION_ID, it) }
+        notice?.let {
+            intent.putExtra(AtaliaChatActivity.EXTRA_NOTICE_RULE_ID, it.ruleId)
+            it.button?.let { button -> intent.putExtra(AtaliaChatActivity.EXTRA_NOTICE_BUTTON, button) }
+        }
         // singleTop: com o chat no topo, a conversa nova chega por onNewIntent.
         intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
         if (context !is Activity) intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

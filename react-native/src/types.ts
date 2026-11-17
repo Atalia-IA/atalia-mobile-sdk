@@ -95,4 +95,9 @@ export type AtaliaLauncherOptions = {
   dockable?: boolean;
   /** Carrega o chat escondido enquanto o botão está na tela: o toque abre o chat pronto. Padrão: `true`. */
   preloadChat?: boolean;
+  /**
+   * Mostra, acima do botão, os balões do chat fechado: aviso das regras por página, prévia da
+   * mensagem nova e boas-vindas, iguais aos do site. Padrão: `true`. Ver {@link setPage}.
+   */
+  popups?: boolean;
 };

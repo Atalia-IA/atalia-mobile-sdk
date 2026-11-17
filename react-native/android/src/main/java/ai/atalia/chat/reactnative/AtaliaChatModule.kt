@@ -11,6 +11,8 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.graphics.Color
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.functions.Queues
@@ -42,6 +44,7 @@ class LauncherRecord : Record {
     @Field val draggable: Boolean? = null
     @Field val dockable: Boolean? = null
     @Field val preloadChat: Boolean? = null
+    @Field val popups: Boolean? = null
 }
 
 /** Ponte entre o JavaScript e o SDK Android (`ai.atalia:chat`). */
@@ -172,6 +175,11 @@ class AtaliaChatModule : Module() {
             activity.runOnUiThread { Atalia.showLauncher(activity, options) }
         }
 
+        // Tela do app em que o visitante está (regras por página). O SDK fala com os WebViews: thread principal.
+        Function("setPage") { url: String? ->
+            Handler(Looper.getMainLooper()).post { Atalia.setPage(url) }
+        }
+
         Function("hideLauncher") {
             appContext.currentActivity?.let { activity ->
                 activity.runOnUiThread { Atalia.hideLauncher(activity) }
@@ -233,6 +241,7 @@ class AtaliaChatModule : Module() {
             draggable = record.draggable ?: false,
             dockable = record.dockable ?: defaults.dockable,
             preloadChat = record.preloadChat ?: defaults.preloadChat,
+            popups = record.popups ?: defaults.popups,
         )
     }
 

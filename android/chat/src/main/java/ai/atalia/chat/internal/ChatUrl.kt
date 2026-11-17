@@ -18,32 +18,65 @@ internal data class SdkFragment(
     val session: String? = null,
     val identity: String? = null,
     val conversationId: Long? = null,
-    val closeButton: Boolean = true,
+    /** Nulo só na camada dos balões, que não tem botão "Fechar". */
+    val closeButton: Boolean? = true,
     /** Chat pré-carregado escondido: nasce em segundo plano (sem socket, sem presença, sem marcar lidas). */
     val background: Boolean = false,
+    /** Tela do app em que o visitante está: é o que as regras por página do canal comparam. */
+    val page: String? = null,
+    /** Abre direto no aviso dessa regra (toque no balão do aviso). */
+    val notice: NoticeTarget? = null,
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("protocol", protocol)
         put("platform", platform)
         put("sdkVersion", sdkVersion)
-        put("closeButton", closeButton)
+        closeButton?.let { put("closeButton", it) }
         appVersion?.let { put("appVersion", it) }
         session?.let { put("session", it) }
         identity?.let { put("identity", it) }
         conversationId?.let { put("conversationId", it) }
         if (background) put("background", true)
+        page?.let { put("page", it) }
+        notice?.let { put("notice", it.toJson()) }
     }
 
     fun encoded(): String = Base64Url.encode(toJson().toString().toByteArray(Charsets.UTF_8))
 }
 
+/**
+ * Aviso de uma regra por página. Com [button] (posição do botão de fluxo tocado no balão), o aviso
+ * já vira conversa.
+ */
+internal data class NoticeTarget(val ruleId: Long, val button: Int? = null) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("ruleId", ruleId)
+        button?.let { put("button", it) }
+    }
+
+    /** Payload do comando `open_notice`: `button` sempre presente, inteiro ou null. */
+    fun toCommand(): JSONObject = JSONObject().put("ruleId", ruleId).put("button", button ?: JSONObject.NULL)
+}
+
 internal object ChatUrl {
-    /** `<base>/chat/<token>?sdk=1#sdk=...`, ou `<base>/?sdk=1#sdk=...` no domínio próprio. */
-    fun build(baseUrl: String, channelToken: String, customDomain: Boolean, fragment: SdkFragment): String {
+    private const val PAGE_MAX_LENGTH = 2048
+
+    /**
+     * `<base>/chat/<token>?sdk=1#sdk=...`, ou `<base>/?sdk=1#sdk=...` no domínio próprio.
+     * Com [popup], a camada dos balões (`?sdk=popup`).
+     */
+    fun build(baseUrl: String, channelToken: String, customDomain: Boolean, fragment: SdkFragment, popup: Boolean = false): String {
         val base = baseUrl.trimEnd('/')
         val path = if (customDomain) "/" else "/chat/${pathSegment(channelToken)}"
-        return "$base$path?sdk=1#sdk=${fragment.encoded()}"
+        return "$base$path?sdk=${if (popup) "popup" else "1"}#sdk=${fragment.encoded()}"
     }
+
+    /** Fragmento da camada dos balões: só diagnóstico, sessão e tela do app. */
+    fun popupFragment(appVersion: String?, session: String?, page: String?): SdkFragment =
+        SdkFragment(appVersion = appVersion, session = session, closeButton = null, page = page)
+
+    /** Tela do app como o widget espera: sem espaços nas pontas, até 2048 caracteres, vazio = nenhuma. */
+    fun normalizePage(url: String?): String? = url?.trim()?.take(PAGE_MAX_LENGTH)?.takeIf { it.isNotEmpty() }
 
     fun origin(baseUrl: String): String {
         val match = Regex("^(https?://[^/?#]+)").find(baseUrl.trim())

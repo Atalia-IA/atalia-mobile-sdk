@@ -44,6 +44,56 @@
         "background": true
       },
       "expectedPrefix": "https://chat.atalia.ai/chat/wct_abc123?sdk=1#sdk="
+    },
+    {
+      "name": "tela do app e aviso a abrir",
+      "baseUrl": "https://chat.atalia.ai",
+      "channelToken": "wct_abc123",
+      "customDomain": false,
+      "fragment": {
+        "protocol": 1,
+        "platform": "ios",
+        "sdkVersion": "0.5.0",
+        "appVersion": "3.2.1",
+        "session": "sdk-session-123456",
+        "closeButton": true,
+        "page": "https://exemplo.com.br/cursos/10",
+        "notice": {
+          "ruleId": 7,
+          "button": 0
+        }
+      },
+      "expectedPrefix": "https://chat.atalia.ai/chat/wct_abc123?sdk=1#sdk="
+    },
+    {
+      "name": "camada dos balões",
+      "popup": true,
+      "baseUrl": "https://chat.atalia.ai",
+      "channelToken": "wct_abc123",
+      "customDomain": false,
+      "fragment": {
+        "protocol": 1,
+        "platform": "android",
+        "sdkVersion": "0.5.0",
+        "appVersion": "3.2.1",
+        "session": "sdk-session-123456",
+        "page": "/cursos/10"
+      },
+      "expectedPrefix": "https://chat.atalia.ai/chat/wct_abc123?sdk=popup#sdk="
+    },
+    {
+      "name": "camada dos balões no domínio próprio",
+      "popup": true,
+      "baseUrl": "https://chat.exemplo.com.br",
+      "channelToken": "wct_abc123",
+      "customDomain": true,
+      "fragment": {
+        "protocol": 1,
+        "platform": "ios",
+        "sdkVersion": "0.5.0",
+        "appVersion": "3.2.1"
+      },
+      "expectedPrefix": "https://chat.exemplo.com.br/?sdk=popup#sdk="
     }
   ]
 }

@@ -32,6 +32,7 @@ struct LauncherRecord: Record {
     @Field var draggable: Bool?
     @Field var dockable: Bool?
     @Field var preloadChat: Bool?
+    @Field var popups: Bool?
 }
 
 /// Ponte entre o JavaScript e o SDK iOS (o mesmo do Swift Package Manager, compilado neste pod).
@@ -159,6 +160,11 @@ public class AtaliaChatModule: Module {
             }
         }
 
+        // Tela do app em que o visitante está (regras por página).
+        Function("setPage") { (url: String?) in
+            Task { @MainActor in Atalia.setPage(url) }
+        }
+
         Function("hideLauncher") {
             Task { @MainActor in
                 self.launcher?.removeFromSuperview()
@@ -213,6 +219,7 @@ public class AtaliaChatModule: Module {
         options.draggable = record.draggable ?? false
         if let dockable = record.dockable { options.dockable = dockable }
         if let preloadChat = record.preloadChat { options.preloadChat = preloadChat }
+        if let popups = record.popups { options.popups = popups }
         return options
     }
 

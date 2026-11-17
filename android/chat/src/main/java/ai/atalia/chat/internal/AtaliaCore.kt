@@ -34,6 +34,10 @@ internal class AtaliaStateHolder {
     val chatOpen = MutableStateFlow(false)
     /** Aparência do canal no painel. Nula até o `configure`. */
     val branding = MutableStateFlow<ChannelBranding?>(null)
+    /** Token da sessão guardada. A camada dos balões recarrega quando ele muda. */
+    val sessionToken = MutableStateFlow<String?>(null)
+    /** Tela do app em que o visitante está ([ai.atalia.chat.Atalia.setPage]). */
+    val page = MutableStateFlow<String?>(null)
     val events = MutableSharedFlow<AtaliaEvent>(extraBufferCapacity = 64)
     val listeners = CopyOnWriteArraySet<AtaliaListener>()
 }
@@ -84,10 +88,26 @@ internal class AtaliaCore(
         // Sem cache, o estado fica nulo até a primeira consulta: o botão flutuante não aparece com
         // a cor padrão para trocar de cor um instante depois.
         state.branding.value = store.loadBranding()
-        state.identified.value = store.load()?.identified ?: false
+        val stored = store.load()
+        state.identified.value = stored?.identified ?: false
+        state.sessionToken.value = stored?.token
     }
 
     val storedSessionToken: String? get() = store.load()?.token
+
+    /** Tela do app em que o visitante está, para o `page` do fragmento. */
+    val page: String? get() = state.page.value
+
+    /** Único ponto que grava a sessão: quem observa o token (camada dos balões) fica sabendo. */
+    private fun saveSession(session: StoredSession) {
+        store.save(session)
+        state.sessionToken.value = session.token
+    }
+
+    private fun clearSession() {
+        store.clear()
+        state.sessionToken.value = null
+    }
 
     // Sessão
 
@@ -97,7 +117,7 @@ internal class AtaliaCore(
             val token = UUID.randomUUID().toString()
             val response = api.createSession(token)
             if (!response.isSuccess) throw AtaliaException(response.code ?: "SESSION_FAILED")
-            store.save(StoredSession(token, identified = false, externalId = null))
+            saveSession(StoredSession(token, identified = false, externalId = null))
             token
         }
     }
@@ -130,7 +150,7 @@ internal class AtaliaCore(
         if (!response.isSuccess || newToken == null || externalId == null || contactId == null) {
             throw AtaliaException(response.code ?: "INVALID_TOKEN")
         }
-        store.save(StoredSession(newToken, identified = true, externalId = externalId))
+        saveSession(StoredSession(newToken, identified = true, externalId = externalId))
         state.identified.value = true
         emit(AtaliaEvent.Identified(externalId, contactId))
         runCatching { refreshUnread() }
@@ -148,7 +168,7 @@ internal class AtaliaCore(
         store.load()?.token?.let { token -> runCatching { api.logout(token) } }
         // A próxima abertura cria uma sessão anônima nova: o histórico do usuário anterior
         // não aparece para quem usar o aparelho depois.
-        store.clear()
+        clearSession()
         registeredPush = null
         state.identified.value = false
         setUnread(0)
@@ -188,7 +208,7 @@ internal class AtaliaCore(
 
         var response = api.registerPushDevice(session, deviceInfo().put("token", token).put("provider", "fcm"))
         if (response.status == 401) {
-            store.clear()
+            clearSession()
             state.identified.value = false
             session = ensureSession()
             response = api.registerPushDevice(session, deviceInfo().put("token", token).put("provider", "fcm"))
@@ -261,7 +281,7 @@ internal class AtaliaCore(
         when (message.type) {
             "session_changed" -> message.string("sessionToken")?.let { token ->
                 val identified = message.bool("identified") ?: false
-                store.save(StoredSession(token, identified, message.string("externalId")))
+                saveSession(StoredSession(token, identified, message.string("externalId")))
                 state.identified.value = identified
                 // Sessão nova vinda do widget (identify/logout pelo chat): o aparelho acompanha.
                 if (store.loadPushToken() != null && registeredPush?.first != token) {

@@ -147,6 +147,18 @@ export function hideLauncher(): void {
   Native.hideLauncher();
 }
 
+// Tela do app
+
+/**
+ * Diz em que tela do app o visitante está, para as regras por página do canal (avisos e modo de
+ * abertura) valerem no app como valem no site. Passe a URL equivalente do site
+ * (`https://exemplo.com.br/cursos/10`) ou só o caminho (`/cursos/10`); `null` volta ao padrão, em
+ * que só valem as regras de "todas as páginas". Chame a cada troca de tela.
+ */
+export function setPage(url: string | null): void {
+  Native.setPage(typeof url === 'string' && url.trim() ? url.trim().slice(0, 2048) : null);
+}
+
 // Hooks
 
 const INITIAL_STATE: AtaliaState = { unreadCount: 0, isIdentified: false, isChatOpen: false };
@@ -212,6 +224,7 @@ const Atalia = {
   handleNotificationTap,
   showLauncher,
   hideLauncher,
+  setPage,
 };
 
 export default Atalia;
