@@ -35,7 +35,12 @@ Na aba **Actions**, o workflow **Release**:
 2. roda os testes do iOS e do Android;
 3. assina e sobe o pacote Android.
 
-Se falhar antes do último passo, nada foi publicado. Para tentar de novo:
+Se o job de iOS ficar parado na fila ou for cancelado sem começar (falta de máquina macOS no GitHub), não precisa mexer na tag:
+
+1. tente **Re-run jobs › Re-run failed jobs**;
+2. se continuar, **Actions › Release › Run workflow**: informe a versão (a tag que já existe) e, se quiser, outra máquina para o iOS. O código testado e publicado é o da tag.
+
+Se falhar antes do último passo, nada foi publicado. Para tentar de novo com código corrigido:
 
 1. corrija o problema;
 2. apague o release e a tag;

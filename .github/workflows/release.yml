@@ -3,10 +3,33 @@ name: Release
 # Publicar um release no GitHub (tag = versão, ex.: 0.1.0) dispara tudo:
 # - iOS: a própria tag já é a versão que o Swift Package Manager enxerga;
 # - Android: sobe para o Maven Central e fica esperando o "Publish" em central.sonatype.com.
+#
+# Também roda à mão (Actions › Release › Run workflow) com a versão de uma tag que JÁ existe:
+# serve para repetir um release que parou na fila sem apagar e recriar a tag. O código testado e
+# publicado é sempre o da tag; só este arquivo vem do branch escolhido.
 # Passo a passo em RELEASING.md.
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Versão (tag que já existe, ex.: 0.5.0)'
+        required: true
+        type: string
+      macos_runner:
+        description: 'Máquina do job de iOS (troque se a fila do macOS estiver parada)'
+        type: choice
+        default: macos-15-intel
+        options:
+          - macos-15-intel
+          - macos-15
+          - macos-14
+          - macos-26
+
+env:
+  # Release publicado: a tag do evento. Rodando à mão: a versão informada.
+  TAG: ${{ inputs.version || github.ref_name }}
 
 permissions:
   contents: read
@@ -16,9 +39,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
       - name: Conferir a versão da tag
-        env:
-          TAG: ${{ github.ref_name }}
         run: |
           if ! [[ "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
             echo "::error::A tag '$TAG' não é uma versão. Use o formato 0.1.0, sem 'v'."
@@ -33,9 +56,12 @@ jobs:
 
   ios:
     needs: verify
-    runs-on: macos-15
+    # Intel por padrão: a fila das máquinas macOS arm64 (macos-15) chega a não entregar o job.
+    runs-on: ${{ inputs.macos_runner || 'macos-15-intel' }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
       - name: Testes (núcleo, no macOS)
         run: swift test
       - name: Build para iOS
@@ -49,6 +75,8 @@ jobs:
         working-directory: android
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -68,7 +96,6 @@ jobs:
         run: ./gradlew :chat:testDebugUnitTest
       - name: Publicar no Maven Central
         env:
-          TAG: ${{ github.ref_name }}
           ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
           ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_KEY }}
